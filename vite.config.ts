@@ -48,9 +48,4 @@ export default defineConfig({
       devOptions: { enabled: true },
     }),
   ],
-  server: {
-    proxy: {
-      '/api': 'http://localhost:3000',
-    },
-  },
 })

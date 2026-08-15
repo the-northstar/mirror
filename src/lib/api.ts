@@ -24,7 +24,17 @@ export interface AnalyzeResponse {
 
 async function unwrap<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => null)
-  if (!res.ok) throw new Error(body?.error ?? 'Something went wrong. Please try again.')
+  if (!res.ok) {
+    // A non-JSON body means the API route itself is missing, which in practice
+    // means the frontend is being served without the server (`vite` alone).
+    // Say that, rather than blaming the photo.
+    if (body === null) {
+      throw new Error(
+        `The API is not responding (HTTP ${res.status}). Run "npm run dev" to start the server alongside the app.`,
+      )
+    }
+    throw new Error(body.error ?? 'Something went wrong. Please try again.')
+  }
   return body as T
 }
 

@@ -70,11 +70,23 @@ it, so opening devtools cannot drain the account's units.
 ```bash
 npm install
 cp .env.example .env      # add your YouCam key
-npx vercel dev            # serves the app and /api together on :3000
+npm run dev               # builds, then serves app + API on :3000
 ```
 
-`npm run dev` alone starts only the frontend; the API routes need `vercel dev`
-(or any host that runs the `api/` directory) to respond.
+`server.js` is a dependency-free Node server that serves the built frontend and
+the API routes together, so there is no platform lock-in. The route handlers are
+plain `(Request) => Response` functions, so they also drop into Vercel, Netlify,
+or Cloudflare Workers unchanged.
+
+Requires Node 22+ (uses `--experimental-strip-types` to run the TypeScript
+handlers directly).
+
+### Try-on needs a public URL
+
+The VTO API fetches the garment image from *its* servers, so it cannot reach
+`localhost`. Skin analysis works locally because that image is uploaded rather
+than fetched. To demo try-on end to end, deploy the app or expose it with a
+tunnel. Running locally, the app says so instead of failing opaquely.
 
 ## Photo requirements
 

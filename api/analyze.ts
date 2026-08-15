@@ -1,4 +1,4 @@
-import { uploadFile, analyzeSkin, type SkinResult } from './_youcam.js'
+import { uploadFile, analyzeSkin, type SkinResult } from './_youcam.ts'
 
 /** SD set. Enough for the styling bridge without HD's larger image demands. */
 const CONCERNS = ['redness', 'age_spot', 'texture', 'acne', 'oiliness', 'moisture', 'radiance', 'pore']
@@ -60,6 +60,11 @@ export default async function handler(req: Request): Promise<Response> {
 
 /** Map YouCam's error codes onto something a user can act on. */
 function friendly(message: string): string {
+  // Setup problems are the operator's to fix, so surface them verbatim.
+  if (message.includes('YOUCAM_API_KEY')) return message
+  if (message.includes('not recognized') || message.includes('InvalidApiKey')) {
+    return 'The YouCam API key was rejected. Check YOUCAM_API_KEY in your .env.'
+  }
   if (message.includes('error_no_face')) return 'We could not find a face in that photo. Try a clear, front-facing selfie.'
   if (message.includes('face_too_small')) return 'Move closer to the camera. Your face needs to fill more of the frame.'
   if (message.includes('lighting_dark')) return 'That photo is too dark. Try again in brighter, even light.'

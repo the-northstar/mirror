@@ -1,4 +1,4 @@
-import { tryOnGarment, type GarmentCategory } from './_youcam.js'
+import { tryOnGarment, type GarmentCategory } from './_youcam.ts'
 
 const CATEGORIES: GarmentCategory[] = [
   'full_body',
@@ -56,6 +56,11 @@ export default async function handler(req: Request): Promise<Response> {
 }
 
 function friendly(message: string): string {
+  // Setup problems are the operator's to fix, so surface them verbatim.
+  if (message.includes('YOUCAM_API_KEY')) return message
+  if (message.includes('not recognized') || message.includes('InvalidApiKey')) {
+    return 'The YouCam API key was rejected. Check YOUCAM_API_KEY in your .env.'
+  }
   if (message.includes('error_pose')) return 'Stand facing the camera, full body in frame, and try again.'
   if (message.includes('error_invalid_src')) return 'That photo will not work for try-on. Use a clear, full-length shot.'
   if (message.includes('error_invalid_ref')) return 'This garment image could not be processed.'

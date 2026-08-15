@@ -13,7 +13,11 @@ const BASE = 'https://yce-api-01.makeupar.com'
 
 const apiKey = (): string => {
   const key = process.env.YOUCAM_API_KEY
-  if (!key) throw new Error('YOUCAM_API_KEY is not set')
+  if (!key) {
+    throw new Error(
+      'YOUCAM_API_KEY is not set. Copy .env.example to .env and add your key from the YouCam API console.',
+    )
+  }
   return key
 }
 
