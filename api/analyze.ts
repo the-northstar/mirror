@@ -61,7 +61,7 @@ export default async function handler(req: Request): Promise<Response> {
 /** Map YouCam's error codes onto something a user can act on. */
 function friendly(message: string): string {
   if (message.includes('error_no_face')) return 'We could not find a face in that photo. Try a clear, front-facing selfie.'
-  if (message.includes('face_too_small')) return 'Move closer to the camera — your face needs to fill more of the frame.'
+  if (message.includes('face_too_small')) return 'Move closer to the camera. Your face needs to fill more of the frame.'
   if (message.includes('lighting_dark')) return 'That photo is too dark. Try again in brighter, even light.'
   if (message.includes('face_out_of_bound')) return 'Your face is partly out of frame. Centre yourself and retake.'
   return 'Skin analysis failed. Please try another photo.'

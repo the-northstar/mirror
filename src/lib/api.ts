@@ -46,7 +46,13 @@ export async function tryOn(
     await fetch('/api/tryon', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modelFileId, garmentUrl, category }),
+      body: JSON.stringify({
+        modelFileId,
+        // YouCam fetches ref_file_url from its own servers, so a relative
+        // catalog path has to become an absolute, publicly reachable URL.
+        garmentUrl: new URL(garmentUrl, location.origin).href,
+        category,
+      }),
       signal,
     }),
   )

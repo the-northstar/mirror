@@ -278,8 +278,13 @@ function GarmentRow({
         <img className="try-frame" src={result} alt={`You wearing the ${garment.name}`} />
       )}
 
-      {!busy && !result && photo && (
-        <img className="try-frame ghost" src={photo} alt="" />
+      {/* Before rendering, show the garment itself rather than a blank slot, so
+          the row communicates what "See it on me" will actually put on you. */}
+      {!busy && !result && (
+        <div className="preview">
+          <img className="preview-garment" src={garment.url} alt={garment.name} />
+          {photo && <img className="preview-you" src={photo} alt="" />}
+        </div>
       )}
 
       {error && (

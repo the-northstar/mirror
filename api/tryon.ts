@@ -25,6 +25,18 @@ export default async function handler(req: Request): Promise<Response> {
     if (!garmentUrl || typeof garmentUrl !== 'string') {
       return Response.json({ error: 'Missing garment.' }, { status: 400 })
     }
+    // YouCam fetches this URL from its own servers, so localhost is
+    // unreachable to it. Fail with a clear message rather than an opaque
+    // upstream error when running locally.
+    if (/^https?:\/\/(localhost|127\.|0\.0\.0\.0|\[::1\])/i.test(garmentUrl)) {
+      return Response.json(
+        {
+          error:
+            'Try-on needs garment images on a public URL. Deploy the app, or set GARMENT_BASE_URL to a public host.',
+        },
+        { status: 400 },
+      )
+    }
     if (!CATEGORIES.includes(category)) {
       return Response.json({ error: 'Unknown garment category.' }, { status: 400 })
     }

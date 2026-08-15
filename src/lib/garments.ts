@@ -16,8 +16,12 @@ export interface Garment {
  * a colour so the skin-derived palette can rank it — that ranking is the whole
  * point of the app, so colour is a first-class field rather than metadata.
  *
- * Images come from Perfect Corp's own public sample assets, which are known to
- * satisfy the VTO engine's garment-image requirements.
+ * Garment images are served from /public so the catalog cannot break on a dead
+ * third-party URL. They are flat-lays on white, the shape the VTO engine
+ * expects for a reference garment.
+ *
+ * The VTO API needs a publicly reachable URL for ref_file_url, so these are
+ * resolved to absolute URLs at call time (see src/lib/api.ts).
  */
 export const GARMENTS: Garment[] = [
   {
@@ -26,7 +30,7 @@ export const GARMENTS: Garment[] = [
     colorName: 'Sage',
     hex: '#8a9a7b',
     category: 'upper_body',
-    url: 'https://plugins-media.makeupar.com/strapi/assets/clothes_reference_upper_body_01_1f6c37e9c3.png',
+    url: '/garments/sage-knit.png',
   },
   {
     id: 'petrol-shirt',
@@ -34,7 +38,7 @@ export const GARMENTS: Garment[] = [
     colorName: 'Petrol',
     hex: '#2f5d62',
     category: 'upper_body',
-    url: 'https://plugins-media.makeupar.com/strapi/assets/clothes_reference_upper_body_02_0a3f2b5f11.png',
+    url: '/garments/petrol-shirt.png',
   },
   {
     id: 'navy-full',
@@ -42,7 +46,7 @@ export const GARMENTS: Garment[] = [
     colorName: 'Navy',
     hex: '#26334d',
     category: 'full_body',
-    url: 'https://plugins-media.makeupar.com/strapi/assets/clothes_reference_full_body_01_5a000d999f.png',
+    url: '/garments/navy-set.png',
   },
   {
     id: 'camel-coat',
@@ -50,7 +54,7 @@ export const GARMENTS: Garment[] = [
     colorName: 'Camel',
     hex: '#b08d57',
     category: 'outer',
-    url: 'https://plugins-media.makeupar.com/strapi/assets/clothes_reference_full_body_02_71f4a4e9c1.png',
+    url: '/garments/camel-coat.png',
   },
 ]
 

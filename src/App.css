@@ -144,9 +144,32 @@
   display: block;
 }
 
-/* The un-rendered state shows the user's own photo, dimmed, so the button
-   clearly refers to *them* rather than an abstract slot. */
-.try-frame.ghost {
-  opacity: 0.28;
-  filter: grayscale(1);
+/* Pre-render state: the garment on its own, with the user's photo tucked in
+   the corner so the pairing about to happen is legible at a glance. */
+.preview {
+  position: relative;
+  border-radius: var(--radius-sm);
+  /* The flat-lays are on white, so they need a light plate to keep their
+     colour readable. A dark surface would crush them. */
+  background: #e9ecef;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+
+.preview-garment {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.preview-you {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 56px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
 }

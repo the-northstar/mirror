@@ -50,13 +50,13 @@ export interface ColorRec {
  * so they pull apparent skin tone away from flushed.
  */
 const CALMING: ColorRec[] = [
-  { name: 'Sage', hex: '#8a9a7b', reason: 'Green-family, sits opposite red — visually calms flushed areas.' },
+  { name: 'Sage', hex: '#8a9a7b', reason: 'Green-family, sits opposite red, so it visually calms flushed areas.' },
   { name: 'Petrol', hex: '#2f5d62', reason: 'Deep blue-green; neutralises redness without washing you out.' },
   { name: 'Slate blue', hex: '#4a5d7e', reason: 'Cool mid-tone that pulls focus away from surface redness.' },
 ]
 
 const WARM_FLATTERING: ColorRec[] = [
-  { name: 'Camel', hex: '#b08d57', reason: 'Echoes golden undertone — reads harmonious rather than contrasting.' },
+  { name: 'Camel', hex: '#b08d57', reason: 'Echoes golden undertone, reading harmonious rather than contrasting.' },
   { name: 'Cream', hex: '#efe6d2', reason: 'Warm neutral; softer against golden skin than optic white.' },
   { name: 'Olive', hex: '#6b6b3a', reason: 'Warm-leaning green that flatters golden undertones.' },
 ]
@@ -68,7 +68,7 @@ const COOL_FLATTERING: ColorRec[] = [
 ]
 
 const REDNESS_AMPLIFIERS: ColorRec[] = [
-  { name: 'Scarlet', hex: '#c8322d', reason: 'Sits in the same hue family as facial redness — amplifies it.' },
+  { name: 'Scarlet', hex: '#c8322d', reason: 'Sits in the same hue family as facial redness, so it amplifies it.' },
   { name: 'Coral', hex: '#f2705f', reason: 'Warm red-orange; tends to echo flushed tones.' },
   { name: 'Hot pink', hex: '#e0407f', reason: 'Pulls pink into the face where redness is already high.' },
 ]
@@ -117,7 +117,7 @@ export function buildStyleProfile(
     recommended.push(...CALMING)
     avoid.push(...REDNESS_AMPLIFIERS)
     rationale.push(
-      `Your redness reading sits at ${Math.round(redness)}/100 severity. Cool blue-greens sit opposite red on the colour wheel, so they visually settle that down — warm reds and corals do the opposite.`,
+      `Your redness reading sits at ${Math.round(redness)}/100 severity. Cool blue-greens sit opposite red on the colour wheel, so they visually settle that down. Warm reds and corals do the opposite.`,
     )
   }
 
@@ -135,7 +135,7 @@ export function buildStyleProfile(
     recommended.push(COOL_FLATTERING[0], WARM_FLATTERING[0])
     rationale.push(
       hasRedness
-        ? 'Your undertone sits neutral, which is the flexible one — both warm and cool anchors work, so we default to versatile mid-tones.'
+        ? 'Your undertone sits neutral, which is the flexible one. Both warm and cool anchors work, so we default to versatile mid-tones.'
         : 'No redness reading was returned, so we default to versatile mid-tones rather than guessing an undertone.',
     )
   }
