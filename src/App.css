@@ -2,6 +2,14 @@
 .app {
   min-height: 100dvh;
   padding-bottom: 64px;
+
+  /* The bar's edges are derived from whatever container sits under it, so the
+     pill lines up with the page content rather than floating at its own inset.
+     Defaults track .wrap; the landing variant overrides them. */
+  --bar-gap: 14px;
+  --bar-space: clamp(24px, 4vw, 44px); /* clearance below the bar */
+  --bar-measure: 1120px; /* .wrap max-width */
+  --bar-gutter: 20px; /* .wrap padding */
 }
 
 .wrap {
@@ -16,30 +24,61 @@
 }
 
 /* Top bar --------------------------------------------------------------- */
+/* A floating pill rather than a full-bleed band: it clears the top edge, keeps
+   the page visible down both sides, and reads as chrome resting above the page
+   instead of a rule ruled across it. Sticky keeps the same gap once stuck. */
 .bar {
   position: sticky;
-  top: 0;
+  top: var(--bar-gap);
   z-index: 20;
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 0 clamp(16px, 4vw, 40px);
-  height: 64px;
-  background: rgb(251 250 247 / 0.82);
-  backdrop-filter: blur(14px) saturate(1.4);
-  border-bottom: 1px solid var(--line);
+  width: calc(min(var(--bar-measure), 100%) - 2 * var(--bar-gutter));
+  /* Bottom margin, not padding on the page below: it belongs to the chrome, so
+     every screen clears it without each one restating the number. */
+  margin: var(--bar-gap) auto var(--bar-space);
+  padding: 0 10px 0 20px;
+  height: 62px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(251 250 247 / 0.72);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  /* Two shadows: a hairline that seats the edge, and a wide soft one that
+     lifts it off the page without greying the area underneath. */
+  box-shadow:
+    0 1px 2px rgb(28 26 23 / 0.04),
+    0 10px 30px -12px rgb(28 26 23 / 0.18);
 }
 
-/* Landing variant: the bar is the page's own header, so it drops the fill and
-   the rule and takes the landing's width and gutters. */
+/* Landing variant: same pill, re-measured against the landing's own container
+   (max-w-[1400px] px-6 sm:px-10) so its edges sit flush with the hero below. */
 .bar-land {
-  height: auto;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 28px clamp(24px, 5vw, 40px);
-  background: none;
-  backdrop-filter: none;
-  border-bottom: 0;
+  --bar-measure: 1400px;
+  --bar-gutter: 24px;
+}
+
+@media (min-width: 640px) {
+  .bar-land {
+    --bar-gutter: 40px;
+  }
+}
+
+/* Backdrop blur is what keeps the translucent fill legible; without it the
+   bar has to be opaque or text collides with whatever scrolls beneath. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bar {
+    background: var(--paper);
+  }
+}
+
+@media (max-width: 720px) {
+  .bar {
+    height: 56px;
+    padding: 0 8px 0 14px;
+    gap: 10px;
+  }
 }
 
 .bar-tag {
@@ -402,14 +441,16 @@
   font-size: 14px;
 }
 
-.bar {
+/* Named .meter, not .bar: the top bar owns that class, and a second bare .bar
+   rule here silently overrode the chrome's height and fill. */
+.meter {
   height: 8px;
   border-radius: 4px;
   background: var(--paper-2);
   overflow: hidden;
 }
 
-.bar > span {
+.meter > span {
   display: block;
   height: 100%;
   border-radius: 4px;

@@ -442,7 +442,7 @@ function Diagnosis({
               {ranked.map((c) => (
                 <li key={c.type}>
                   <span>{CONCERN_LABEL[c.type] ?? c.type}</span>
-                  <span className="bar" aria-hidden>
+                  <span className="meter" aria-hidden>
                     <span style={{ width: `${Math.max(4, (c.severity / widest) * 100)}%` }} />
                   </span>
                   <span className="num">{Math.round(c.raw_score)}</span>
