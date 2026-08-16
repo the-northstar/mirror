@@ -383,9 +383,11 @@ export interface HairTemplate {
 }
 
 /** Free GET: YouCam's own style catalogue, so a recommendation can be exact. */
-export const hairTemplates = (pageSize = 20) =>
+export const hairTemplates = (pageSize = 20, token?: string) =>
   call<{ templates: HairTemplate[]; next_token?: string }>(
-    `/s2s/v2.1/task/template/hair-transfer?page_size=${pageSize}`,
+    `/s2s/v2.1/task/template/hair-transfer?page_size=${pageSize}${
+      token ? `&starting_token=${token}` : ''
+    }`,
   )
 
 export const tryOnHair = (

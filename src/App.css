@@ -928,6 +928,11 @@
   gap: 10px;
   max-height: 420px;
   overflow-y: auto;
+  /* Rows take their content's height and the surplus scrolls. Without this the
+     capped height is shared out between however many rows there are, which was
+     survivable at 20 templates and collapsed every thumbnail to 4px at 99. */
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
 .thumb-btn {

@@ -58,6 +58,7 @@ import {
   JUDGE_SLICE,
   type Ranked,
 } from './src/lib/rank'
+import { localFor } from './src/lib/localCatalogue'
 import { judge } from './src/lib/judge'
 import { effectsFor, explainEffects, concealerFrom } from './src/lib/makeup'
 import productsRoute, {
@@ -79,6 +80,37 @@ const ALLOWED = ['image/jpeg', 'image/png']
  */
 const shelves = new Map<string, { rows: Product[]; at: number; fellBack: boolean }>()
 const SHELF_TTL = 60 * 60 * 1000
+
+/**
+ * Every page of a template catalogue, not just the first.
+ *
+ * One page is 20 styles and YouCam splits them by category, so asking for a
+ * single page left the Hair studio offering three male cuts out of hundreds,
+ * which reads as a broken screen rather than a short catalogue. Cached,
+ * because the catalogue is the same for every shopper.
+ */
+const TEMPLATE_PAGE = 20
+const MAX_TEMPLATES = 200
+const templateCache = new Map<string, { rows: unknown[]; at: number }>()
+
+async function allTemplates<T>(
+  fetchPage: (pageSize: number, token?: string) => Promise<{ templates: T[]; next_token?: string }>,
+): Promise<T[]> {
+  const key = fetchPage.name
+  const hit = templateCache.get(key)
+  if (hit && Date.now() - hit.at < SHELF_TTL) return hit.rows as T[]
+
+  const rows: T[] = []
+  let token: string | undefined
+  while (rows.length < MAX_TEMPLATES) {
+    const page = await fetchPage(TEMPLATE_PAGE, token)
+    rows.push(...(page.templates ?? []))
+    token = page.next_token
+    if (!token || !page.templates?.length) break
+  }
+  templateCache.set(key, { rows, at: Date.now() })
+  return rows
+}
 
 async function shelf(name: string, load: () => Promise<Product[]>): Promise<Product[]> {
   const hit = shelves.get(name)
@@ -380,9 +412,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     return json({ url: await tryOnLook(fileId, templateId, req.signal) })
   },
 
-  'GET /api/hair/templates': async () => json(await hairTemplates(20)),
+  'GET /api/hair/templates': async () => json({ templates: await allTemplates(hairTemplates) }),
 
-  'GET /api/cloth/templates': async () => json(await clothTemplates(20)),
+  'GET /api/cloth/templates': async () => json({ templates: await allTemplates(clothTemplates) }),
 
   /** Template try-on: the id is YouCam's own, so nothing user-supplied is fetched. */
   'POST /api/tryon/cloth-template': async (req) => {
@@ -458,17 +490,26 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     // shopper, not by being uploaded.
     //
     // The SDK is the exception: embedded on a retailer's own site, it must
-    // recommend only what that retailer actually sells.
+    // recommend only what that retailer actually sells, so neither the public
+    // feeds nor the committed CSV catalogue may leak into it.
     const withStore = (aisle: Aisle, rows: Product[]) =>
       storeId
         ? productsForStore(storeId).filter((p) => p.aisle === aisle)
-        : [...rows, ...productsForAisle(aisle)]
+        : [
+            ...rows,
+            // The committed CSV catalogue joins on the same terms as a
+            // merchant's rows: it widens the shelf, it does not jump it.
+            ...localFor(aisle),
+            ...productsForAisle(aisle),
+          ]
 
     // Hair templates are YouCam's own catalogue, shaped as products so the
     // aisle behaves like the others. Ordered by the detected gender when we
     // have one, never filtered by it.
-    const hair = await hairTemplates(20)
-      .then(({ templates }) =>
+    // The whole catalogue, not the first page: one page is 20 styles split by
+    // category, which left the aisle showing a handful.
+    const hair = await allTemplates(hairTemplates)
+      .then((templates) =>
         templates.map(
           (h): Ranked => ({
             id: h.id,

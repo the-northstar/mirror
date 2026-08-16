@@ -27,6 +27,21 @@ export interface StudioProduct {
   hex: string
 }
 
+/** The category with the most styles in it, or null when there are none. */
+function largestCategory(rows: Array<{ category_name: string }>): string | null {
+  const count = new Map<string, number>()
+  for (const r of rows) count.set(r.category_name, (count.get(r.category_name) ?? 0) + 1)
+  let best: string | null = null
+  let most = 0
+  for (const [name, n] of count) {
+    if (n > most) {
+      most = n
+      best = name
+    }
+  }
+  return best
+}
+
 export function Studio({
   kind,
   fileId,
@@ -69,7 +84,10 @@ export function Studio({
         if (!live) return
         const rows: Template[] = d.templates ?? []
         setTemplates(rows)
-        setCategory((prev) => prev ?? rows[0]?.category_name ?? null)
+        // Open on the fullest category, not whichever happened to come back
+        // first: the catalogue led with three male cuts, so the screen opened
+        // on three options and looked empty.
+        setCategory((prev) => prev ?? largestCategory(rows))
       })
       .catch(() => live && setError('Could not load styles.'))
     return () => {
