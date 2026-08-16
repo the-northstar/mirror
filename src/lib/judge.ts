@@ -1,3 +1,4 @@
+import { askGemini, geminiConfigured } from './gemini'
 import type { Ranked } from './rank'
 
 /**
@@ -57,9 +58,6 @@ export interface JudgeContext {
   concerns?: string[]
 }
 
-/** Flash: the judge runs per track on demand, so latency matters more than depth. */
-const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
-
 /**
  * Choose up to PICKS_PER_AISLE products per aisle, best first.
  *
@@ -74,43 +72,13 @@ export async function judge(
   signal?: AbortSignal,
 ): Promise<Verdict> {
   const fallback = topMatches(shortlists)
-  const key = process.env.GEMINI_API_KEY
-  if (!key) return { picks: fallback, together: '' }
+  if (!geminiConfigured()) return { picks: fallback, together: '' }
 
   try {
-    const body = {
-      contents: [{ parts: [{ text: prompt(shortlists, context) }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.4,
-        // 2.5 models think before answering unless told not to, which cost ~20s
-        // on a request the shopper waits through. The task is choosing six of
-        // twelve per aisle from a list already ranked by code, so there is
-        // nothing here worth reasoning about at that price.
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal,
-      },
-    )
-    if (!res.ok) throw new Error(`gemini ${res.status}`)
-
-    const data = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
-    }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) throw new Error('empty completion')
-
-    const parsed = JSON.parse(text) as {
+    const parsed = await askGemini<{
       picks?: Array<{ aisle: string; productId: string; reason: string }>
       together?: string
-    }
+    }>(prompt(shortlists, context), signal)
 
     const chosen: Record<string, Pick[]> = {}
     const seen: Record<string, Set<string>> = {}

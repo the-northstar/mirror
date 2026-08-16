@@ -31,6 +31,12 @@ interface Profile {
   caveat: string | null
 }
 
+/** The written read-back. `source` says whether a model wrote it. */
+interface Analysis {
+  paragraphs: string[]
+  source: 'model' | 'measured'
+}
+
 interface RankedItem {
   id: string
   tags?: string[]
@@ -712,14 +718,48 @@ function ConcernChart({ concerns }: { concerns: Reading['concerns'] }) {
  * produced it, so the section reads as a report rather than as flattery.
  */
 function ProfileReport({ profile, concerns }: { profile: Profile; concerns: Reading['concerns'] }) {
+  // The measured summary paints immediately; the written one replaces it when
+  // it lands. The shopper never waits on a model to read her own analysis, and
+  // if it never answers she is not told anything different.
+  const [analysis, setAnalysis] = useState<Analysis>(() => ({
+    paragraphs: [profile.summary],
+    source: 'measured',
+  }))
+
+  useEffect(() => {
+    let live = true
+    setAnalysis({ paragraphs: [profile.summary], source: 'measured' })
+    fetch('/api/analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (live && body?.paragraphs?.length) setAnalysis(body)
+      })
+      .catch(() => {
+        // The measured summary is already on screen; that IS the fallback.
+      })
+    return () => { live = false }
+  }, [profile])
+
   return (
     <section className="profile">
       {/* Words beside the numbers they came from, so a claim and its evidence
           are read together rather than a scroll apart. */}
       <div className="profile-top">
         <div className="profile-head">
-          <p className="kicker">What your scan says about you</p>
-          <p className="lead">{profile.summary}</p>
+          <p className="kicker">
+            What your scan says about you
+            {/* Never passed off as measurement: the reader is told which she got. */}
+            <span className="src-tag">
+              {analysis.source === 'model' ? 'written from your readings' : 'from your readings'}
+            </span>
+          </p>
+          {analysis.paragraphs.map((para) => (
+            <p key={para.slice(0, 40)} className="lead">{para}</p>
+          ))}
           {profile.caveat && <p className="tiny profile-caveat">{profile.caveat}</p>}
         </div>
         <ConcernChart concerns={concerns} />

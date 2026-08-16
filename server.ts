@@ -28,7 +28,8 @@ import {
 } from './src/lib/youcam'
 import { colorName, dominantColor } from './src/lib/color'
 import { formulaFor, paletteFor } from './src/lib/prescription'
-import { buildProfile } from './src/lib/profile'
+import { buildProfile, type Profile } from './src/lib/profile'
+import { analyse } from './src/lib/analysis'
 import { GARMENTS } from './src/lib/garments'
 import {
   addProducts,
@@ -346,6 +347,21 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
         face: face.status === 'fulfilled',
       },
     })
+  },
+
+  /**
+   * The written read-back.
+   *
+   * Its own route rather than part of /api/read, so a model call never delays
+   * the scan the shopper is already waiting on: the diagnosis screen paints
+   * from the measured profile and swaps this in when it lands. Takes the
+   * PROFILE the scan already produced rather than the raw reading, so the
+   * model can only rephrase findings the app made — never add one.
+   */
+  'POST /api/analysis': async (req) => {
+    const { profile } = (await req.json()) as { profile?: Profile }
+    if (!profile?.summary) return json({ error: 'Missing the scan profile.' }, 400)
+    return json(await analyse(profile, req.signal))
   },
 
   'POST /api/upload': async (req) => {

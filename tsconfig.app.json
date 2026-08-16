@@ -23,5 +23,13 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/lib/youcam.ts", "src/lib/catalogue.ts", "src/lib/judge.ts", "src/lib/rank.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/lib/youcam.ts",
+    "src/lib/catalogue.ts",
+    "src/lib/judge.ts",
+    "src/lib/rank.ts",
+    "src/lib/gemini.ts",
+    "src/lib/analysis.ts"
+  ]
 }

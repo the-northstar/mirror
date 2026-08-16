@@ -575,6 +575,19 @@
   max-width: 70ch;
 }
 
+/* Says where the words came from without competing with them. */
+.src-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  background: var(--card);
+  text-transform: none;
+}
+
 /* Chart -------------------------------------------------------------------
    Emphasis, not a ramp: bar length already carries magnitude, so colour is
    free to mark the one reading that decided something. The recessive tone
