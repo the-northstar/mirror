@@ -348,20 +348,48 @@ export interface Store {
   id: string
   name: string
   contactEmail: string
+  /**
+   * Secret key for server-to-server feed pushes. Never leaves the merchant's
+   * backend, so it is stripped from every public listing.
+   */
+  apiKey: string
+  /** Polled on a TTL when set: a hosted products.json/CSV or a Shopify domain. */
+  feedUrl?: string
+  feedKind?: 'json' | 'csv' | 'shopify'
 }
 
 const stores = new Map<string, Store>()
 const storeProducts = new Map<string, Product[]>()
 
-export function createStore(input: Omit<Store, 'id'>): Store {
-  const store: Store = { ...input, id: `store-${slug(input.name)}-${stores.size + 1}` }
+export function createStore(input: Omit<Store, 'id' | 'apiKey'>): Store {
+  const store: Store = {
+    ...input,
+    id: `store-${slug(input.name)}-${stores.size + 1}`,
+    apiKey: `mk_${crypto.randomUUID().replace(/-/g, '')}`,
+  }
   stores.set(store.id, store)
   storeProducts.set(store.id, [])
   return store
 }
 
 export const getStore = (id: string) => stores.get(id)
-export const listStores = () => [...stores.values()]
+
+/** The key is a secret, so public listings never carry it. */
+export const listStores = () => [...stores.values()].map(({ apiKey: _k, ...s }) => s)
+
+export const storeByKey = (key: string) =>
+  [...stores.values()].find((s) => s.apiKey === key)
+
+/** Replaces a store's rows wholesale — what a re-pulled feed should do. */
+export function replaceStoreProducts(storeId: string, rows: Product[]) {
+  storeProducts.set(storeId, rows)
+}
+
+export function setStoreFeed(storeId: string, feedUrl: string, feedKind: Store['feedKind']) {
+  const store = stores.get(storeId)
+  if (!store) throw new Error('Unknown store')
+  stores.set(storeId, { ...store, feedUrl, feedKind })
+}
 
 /**
  * Add products to a store.
