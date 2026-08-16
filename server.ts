@@ -22,10 +22,60 @@ import {
 } from './src/lib/youcam'
 import { formulaFor, paletteFor } from './src/lib/prescription'
 import { GARMENTS } from './src/lib/garments'
+import { loadMakeup, loadShopify, SNAPSHOT, type Product } from './src/lib/catalogue'
+import {
+  rankByPalette,
+  rankFoundation,
+  rankGlasses,
+  rankJewellery,
+  rankSkincare,
+  type Ranked,
+} from './src/lib/rank'
+import { judge } from './src/lib/judge'
+import { effectsFor, explainEffects, concealerFrom } from './src/lib/makeup'
 
 const PORT = Number(process.env.PORT) || 8787
 const MAX_BYTES = 10 * 1024 * 1024
 const ALLOWED = ['image/jpeg', 'image/png']
+
+/**
+ * Per-shelf cache. Nobody waits 30s for a page, so a stale shelf answers
+ * immediately and refreshes behind the response.
+ */
+const shelves = new Map<string, { rows: Product[]; at: number; fellBack: boolean }>()
+const SHELF_TTL = 60 * 60 * 1000
+
+async function shelf(name: string, load: () => Promise<Product[]>): Promise<Product[]> {
+  const hit = shelves.get(name)
+  const fresh = hit && Date.now() - hit.at < SHELF_TTL
+  if (hit && fresh) return hit.rows
+  if (hit) void refresh(name, load) // stale-while-revalidate
+
+  try {
+    const rows = await load()
+    if (rows.length) {
+      shelves.set(name, { rows, at: Date.now(), fellBack: false })
+      return rows
+    }
+    throw new Error('empty feed')
+  } catch (err) {
+    // Fallback is per shelf, not per catalogue: losing blush must not cost
+    // the foundation match.
+    console.warn(`[shelf:${name}] ${(err as Error).message}; using snapshot`)
+    const snap = SNAPSHOT[name] ?? hit?.rows ?? []
+    shelves.set(name, { rows: snap, at: Date.now(), fellBack: true })
+    return snap
+  }
+}
+
+async function refresh(name: string, load: () => Promise<Product[]>) {
+  try {
+    const rows = await load()
+    if (rows.length) shelves.set(name, { rows, at: Date.now(), fellBack: false })
+  } catch {
+    // Keep serving what we have.
+  }
+}
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -162,6 +212,97 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     const url = await tryOnHair(fileId, templateId, req.signal)
     return json({ url })
   },
+
+
+  /**
+   * The prescription: rank every aisle, then let the model pick one each.
+   *
+   * Takes the reading rather than a photo, so re-opening a track costs no
+   * YouCam units.
+   */
+  'POST /api/shop': async (req) => {
+    const { skinHex, lipHex, concerns = [], faceShape } = (await req.json()) as {
+      skinHex?: string
+      lipHex?: string
+      concerns?: ConcernOut[]
+      faceShape?: string
+    }
+    if (!skinHex || !/^#[0-9a-f]{6}$/i.test(skinHex)) {
+      return json({ error: 'Missing skin colour from the scan.' }, 400)
+    }
+
+    const palette = paletteFor(skinHex)
+    const formula = formulaFor(concerns)
+
+    const [foundations, lipsticks, blushes, clothes] = await Promise.all([
+      shelf('foundation', () => loadMakeup('foundation', req.signal)),
+      shelf('lipstick', () => loadMakeup('lipstick', req.signal)),
+      shelf('blush', () => loadMakeup('blush', req.signal)),
+      // Two stores, so one dead feed cannot empty the shelf. Kotn and Rothys
+      // both publish plain colour names that resolve to a hex.
+      shelf('clothes', async () => {
+        const stores = ['us.kotn.com', 'www.rothys.com']
+        const results = await Promise.allSettled(
+          stores.map((s) => loadShopify(s, req.signal)),
+        )
+        return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+      }),
+    ])
+
+    const shortlists: Record<string, Ranked[]> = {
+      foundation: rankFoundation(foundations, skinHex),
+      lipstick: rankByPalette(lipsticks, palette),
+      blush: rankByPalette(blushes, palette),
+      clothes: rankByPalette(clothes, palette),
+      skincare: rankSkincare(SNAPSHOT.skincare, concerns),
+      glasses: rankGlasses(SNAPSHOT.glasses, faceShape),
+      jewellery: rankJewellery(SNAPSHOT.jewellery, palette),
+    }
+
+    const verdict = await judge(
+      shortlists,
+      {
+        undertone: palette.undertone,
+        season: palette.season,
+        finish: formula.finish,
+        because: formula.because,
+      },
+      req.signal,
+    )
+
+    // Concealer is derived, not stocked: no free catalogue carries one.
+    const top = shortlists.foundation[0]
+    const concealer = top
+      ? { hex: concealerFrom(top.hex), from: top.name, shade: top.shadeName }
+      : null
+
+    return json({
+      palette,
+      formula,
+      shortlists,
+      picks: verdict.picks,
+      together: verdict.together,
+      concealer,
+      makeup: {
+        effects: effectsFor(formula, top?.hex ?? skinHex, lipHex),
+        explain: explainEffects(formula, palette),
+      },
+      fellBack: Object.fromEntries(
+        [...shelves.entries()].map(([k, v]) => [k, v.fellBack]),
+      ),
+    })
+  },
+
+  /** Per-feed row counts and which shelves fell back to the snapshot. */
+  'GET /api/feeds': async () =>
+    json({
+      shelves: Object.fromEntries(
+        [...shelves.entries()].map(([name, v]) => [
+          name,
+          { rows: v.rows.length, fellBack: v.fellBack, ageMs: Date.now() - v.at },
+        ]),
+      ),
+    }),
 
   'GET /api/catalogue': async () => json({ garments: GARMENTS }),
 }
