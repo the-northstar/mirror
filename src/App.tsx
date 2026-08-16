@@ -635,26 +635,32 @@ function ShopView({
         ))}
       </nav>
 
-      {(aisle === 'clothes' || aisle === 'hair') && (
+      {/* One try-on surface for every aisle that can render, so the canvas
+          behaves the same whether you are trying a shade or a garment. */}
+      {['clothes', 'hair', 'foundation', 'lipstick', 'blush'].includes(aisle) && (
         <Studio
-          kind={aisle === 'clothes' ? 'cloth' : 'hair'}
+          kind={
+            aisle === 'clothes' ? 'cloth' : aisle === 'hair' ? 'hair' : 'makeup'
+          }
+          makeupEffects={shop.makeup.effects}
+          effectCategory={
+            aisle === 'lipstick' ? 'lip_color' : aisle === 'blush' ? 'blush' : 'foundation'
+          }
           fileId={reading.fileId}
           photo={photo}
-          products={
-            aisle === 'clothes'
-              ? (shop.shortlists.clothes ?? []).map((p) => ({
-                  id: p.id,
-                  name: p.name,
-                  brand: p.brand,
-                  image: p.image,
-                  hex: p.hex,
-                }))
-              : []
-          }
+          products={(shop.shortlists[aisle] ?? []).map((p) => ({
+            id: p.id,
+            name: p.shadeName ?? p.name,
+            brand: p.brand,
+            image: p.image,
+            hex: p.hex,
+          }))}
           formulaNote={
             aisle === 'clothes'
-              ? `Styles are ranked against your ${shop.palette.season} palette.`
-              : undefined
+              ? `Ranked against your ${shop.palette.season} palette.`
+              : aisle === 'hair'
+                ? undefined
+                : shop.makeup.explain
           }
         />
       )}

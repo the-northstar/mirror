@@ -16,7 +16,7 @@ interface Template {
   category_name: string
 }
 
-export type StudioKind = 'cloth' | 'hair'
+export type StudioKind = 'cloth' | 'hair' | 'makeup'
 
 /** A real catalogue garment, renderable because cloth-v4 takes an image URL. */
 export interface StudioProduct {
@@ -33,6 +33,8 @@ export function Studio({
   photo,
   formulaNote,
   products = [],
+  makeupEffects,
+  effectCategory = 'foundation',
 }: {
   kind: StudioKind
   fileId: string
@@ -45,6 +47,10 @@ export function Studio({
    * built-in style does.
    */
   products?: StudioProduct[]
+  /** Prescribed makeup effects, so a shade renders with her own intensities. */
+  makeupEffects?: unknown[]
+  /** Which effect the chosen swatch replaces: foundation, lip_color or blush. */
+  effectCategory?: string
 }) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [category, setCategory] = useState<string | null>(null)
@@ -54,6 +60,8 @@ export function Studio({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Makeup has no template catalogue: the shades themselves are the styles.
+    if (kind === 'makeup') return
     let live = true
     fetch(`/api/${kind}/templates`)
       .then((r) => r.json())
@@ -69,14 +77,22 @@ export function Studio({
     }
   }, [kind])
 
-  const wearable = products.filter((p) => p.image)
+  const wearable = kind === 'makeup' ? products : products.filter((p) => p.image)
   const SHOP = 'From the shop'
-  const categories = [
-    ...(wearable.length ? [SHOP] : []),
-    ...new Set(templates.map((t) => t.category_name)),
-  ]
+  const categories =
+    kind === 'makeup'
+      ? []
+      : [...(wearable.length ? [SHOP] : []), ...new Set(templates.map((t) => t.category_name))]
   const shown =
-    category === SHOP
+    kind === 'makeup'
+      ? wearable.map((p) => ({
+          id: p.id,
+          thumb: p.image ?? '',
+          title: p.name,
+          category_name: 'makeup',
+          hex: p.hex,
+        }))
+      : category === SHOP
       ? wearable.map((p) => ({
           id: p.id,
           thumb: p.image!,
@@ -93,19 +109,36 @@ export function Studio({
       // A shop garment goes through the product route, which resolves the
       // image by id server-side; a built-in style goes through templates.
       const isProduct = wearable.some((p) => p.id === selected)
-      const endpoint = kind === 'hair'
-        ? '/api/tryon/hair'
-        : isProduct
-          ? '/api/tryon/cloth'
-          : '/api/tryon/cloth-template'
+      const endpoint =
+        kind === 'makeup'
+          ? '/api/tryon/makeup'
+          : kind === 'hair'
+            ? '/api/tryon/hair'
+            : isProduct
+              ? '/api/tryon/cloth'
+              : '/api/tryon/cloth-template'
+
+      const chosen = wearable.find((p) => p.id === selected)
+      const payload =
+        kind === 'makeup'
+          ? {
+              fileId,
+              // The prescribed intensities travel with the swatch, so the
+              // render is her formula in this shade, not a preset.
+              effects: (makeupEffects ?? []).map((e: any) =>
+                e.category === effectCategory
+                  ? { ...e, palettes: [{ ...e.palettes[0], color: chosen?.hex }] }
+                  : e,
+              ),
+            }
+          : isProduct
+            ? { modelFileId: fileId, garmentId: selected }
+            : { fileId, templateId: selected }
+
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          isProduct
-            ? { modelFileId: fileId, garmentId: selected }
-            : { fileId, templateId: selected },
-        ),
+        body: JSON.stringify(payload),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error ?? 'Try-on failed.')
@@ -154,7 +187,12 @@ export function Studio({
               aria-pressed={selected === t.id}
               onClick={() => setSelected(t.id)}
             >
-              <img src={t.thumb} alt="" loading="lazy" />
+              {t.thumb ? (
+                <img src={t.thumb} alt="" loading="lazy" />
+              ) : (
+                // A shade has no photo worth showing: the colour is the product.
+                <span className="thumb-swatch" style={{ background: (t as any).hex }} />
+              )}
               <span className="thumb-title">{t.title}</span>
             </button>
           ))}

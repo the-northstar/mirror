@@ -199,6 +199,57 @@ export async function loadClothes(signal?: AbortSignal): Promise<Product[]> {
 }
 
 /**
+ * Skincare from Open Beauty Facts.
+ *
+ * Open data with real product photos, which the hardcoded snapshot never had.
+ * Concern targeting comes from the category we asked for, not from parsing
+ * marketing copy: a category is a fact, a claim in a description is not.
+ */
+const SKINCARE_SOURCES = [
+  { tag: 'face-creams', treats: ['moisture', 'texture'] },
+  { tag: 'serums', treats: ['texture', 'redness'] },
+  { tag: 'cleansers', treats: ['oiliness', 'pore', 'acne'] },
+  { tag: 'sunscreen', treats: ['redness'] },
+] as const
+
+export async function loadSkincare(signal?: AbortSignal): Promise<Product[]> {
+  const results = await Promise.allSettled(
+    SKINCARE_SOURCES.map(async (src) => {
+      const res = await fetch(
+        `https://world.openbeautyfacts.org/api/v2/search?categories_tags=${src.tag}` +
+          `&fields=code,product_name,brands,image_front_url&page_size=24`,
+        { signal, headers: { 'User-Agent': 'Mirror/1.0 (hackathon)' } },
+      )
+      if (!res.ok) throw new Error(`${src.tag} ${res.status}`)
+      const { products } = (await res.json()) as {
+        products: Array<{
+          code?: string
+          product_name?: string
+          brands?: string
+          image_front_url?: string
+        }>
+      }
+      return products
+        .filter((p) => p.image_front_url && p.product_name?.trim())
+        .map(
+          (p): Product => ({
+            id: `skin-${src.tag}-${p.code ?? slug(p.product_name!)}`,
+            aisle: 'skincare',
+            brand: (p.brands ?? '').split(',')[0].trim() || 'Unbranded',
+            name: p.product_name!.trim(),
+            // Skincare ranks on what it treats, never on colour.
+            hex: '#e8e4dd',
+            colorName: 'neutral',
+            image: p.image_front_url,
+            tags: [...src.treats],
+          }),
+        )
+    }),
+  )
+  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+}
+
+/**
  * Merchant colour words to hex.
  *
  * Deliberately narrow: a name we cannot resolve returns null and the row is

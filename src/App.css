@@ -584,7 +584,10 @@
 .product-media {
   position: relative;
   aspect-ratio: 4 / 3;
-  background: var(--paper-2);
+  /* Most shots are cut out on white, so a white ground makes them invisible.
+     The tint plus an inner edge gives the silhouette something to sit on. */
+  background: linear-gradient(160deg, #f2f1ec 0%, #e8e7e1 100%);
+  border-bottom: 1px solid var(--line);
 }
 
 .product-media img {
@@ -594,8 +597,11 @@
   height: 100%;
   /* Product shots are tall bottles on white; cropping them loses the product. */
   object-fit: contain;
-  background: #fff;
+  padding: 10px;
   display: block;
+  /* A soft drop shadow separates a white bottle from a pale ground without
+     needing the source to have a cutout alpha channel. */
+  filter: drop-shadow(0 3px 8px rgb(22 26 23 / 0.16));
 }
 
 .product-fill {
@@ -1520,4 +1526,11 @@
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+/* A makeup swatch stands in for a thumbnail: the colour IS the product. */
+.thumb-swatch {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 8px;
+  border: 1px solid rgb(22 26 23 / 0.1);
 }

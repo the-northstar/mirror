@@ -32,6 +32,7 @@ import {
   listStores,
   loadMakeup,
   loadClothes,
+  loadSkincare,
   loadShopify,
   ordersFor,
   placeOrder,
@@ -350,13 +351,18 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     const palette = paletteFor(skinHex)
     const formula = formulaFor(concerns)
 
-    const [foundations, lipsticks, blushes, clothes] = await Promise.all([
+    const [foundations, lipsticks, blushes, skincare, clothes] = await Promise.all([
       shelf('foundation', () => loadMakeup('foundation', req.signal)),
       shelf('lipstick', () => loadMakeup('lipstick', req.signal)),
       shelf('blush', () => loadMakeup('blush', req.signal)),
       // dummyjson first: its photos are on a CDN that stays up and each row
       // declares its garment category. The storefront scrapes stay as a
       // supplement, so one dead feed cannot empty the shelf.
+      // Skincare has real photos now; the snapshot stays as the floor.
+      shelf('skincare', async () => {
+        const rows = await loadSkincare(req.signal)
+        return rows.length ? rows : SNAPSHOT.skincare
+      }),
       shelf('clothes', async () => {
         const [primary, extra] = await Promise.allSettled([
           loadClothes(req.signal),
@@ -366,7 +372,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
           ...(primary.status === 'fulfilled' ? primary.value : []),
           ...(extra.status === 'fulfilled' ? extra.value : []),
         ]
-        return measureColors(rows)
+        return measureColors(rows.filter((r) => r.image))
       }),
     ])
 
@@ -383,7 +389,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       lipstick: rankByPalette(withStore('lipstick', lipsticks), palette),
       blush: rankByPalette(withStore('blush', blushes), palette),
       clothes: rankByPalette(withStore('clothes', clothes), palette),
-      skincare: rankSkincare(withStore('skincare', SNAPSHOT.skincare), concerns),
+      skincare: rankSkincare(withStore('skincare', skincare), concerns),
     }
 
     // Detected gender demotes mismatched rows rather than removing them: the
