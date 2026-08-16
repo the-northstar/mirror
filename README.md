@@ -50,6 +50,28 @@ Implementation notes worth flagging, all learned from the API reference:
   `InvalidTaskId` **while still consuming units**, so the client always polls
   through to `success` or `error`.
 
+## Store owners
+
+Shoppers stay anonymous. A retailer signs in with **Clerk** (the *Store* screen)
+and stocks the same shelves the prescription ranks, so their products compete on
+colour match rather than being pinned to the top.
+
+- `POST /api/products` takes ownership from the verified Clerk session token,
+  never from the request body, so an owner can only touch their own rows.
+- `POST /api/products/import` takes an **.xlsx or .csv** with a header row —
+  columns `name, brand, aisle, hex, image, price, url`, matched by name so the
+  order does not matter. `name`, `hex` and `image` are required. Bad rows are
+  reported by spreadsheet line number and the good ones still import; the format
+  is sniffed from the file's bytes, not its extension.
+- `GET /api/products` is public — it is what `/api/shop` merges onto the
+  shelves — and strips owner ids, adding `mine` only for a signed-in owner.
+- Product images must be public `https` URLs: try-on fetches them from YouCam's
+  own servers.
+
+Products live in `products.json` beside the server — no database to run. Add the
+Clerk keys from `.env.example`; without them the app still works for shoppers and
+the Store screen explains the setup.
+
 ## Architecture
 
 ```

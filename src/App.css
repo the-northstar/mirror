@@ -1280,3 +1280,127 @@
     gap: 44px;
   }
 }
+
+/* Store owner ----------------------------------------------------------- */
+.owner-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.actions .btn {
+  flex: 1 1 auto;
+}
+
+.form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 20px;
+}
+
+.row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+}
+
+/* One column on a phone, two once there is room for a label pair. */
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.field-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 0;
+}
+
+.field-grid input,
+.field-grid select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  color: var(--ink);
+  font: inherit;
+}
+
+.field-grid input[type='color'] {
+  width: 56px;
+  height: 42px;
+  padding: 3px;
+  flex: none;
+}
+
+.colorrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Product tiles: as many as fit, never narrower than a thumb-sized card. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.tile {
+  margin: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tile img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+  background: #fff;
+}
+
+.tile figcaption {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  padding: 12px;
+  font-size: 14px;
+}
+
+.tile .dot {
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+@media (min-width: 720px) {
+  .field-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .field-grid .span-2 {
+    grid-column: 1 / -1;
+  }
+  .actions .btn {
+    flex: 0 0 auto;
+  }
+}

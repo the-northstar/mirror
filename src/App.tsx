@@ -3,6 +3,7 @@ import { Camera } from './Camera'
 import { Studio } from './Studio'
 import { Landing } from './landing/Landing'
 import { fileToDataUrl, loadScans, removeScan, saveScan, type PastScan } from './lib/history'
+import Store from './Store'
 import './App.css'
 
 /* -- Types mirroring the API ------------------------------------------- */
@@ -42,7 +43,7 @@ interface Shop {
   makeup: { effects: unknown[]; explain: string }
 }
 
-type Screen = 'land' | 'scanning' | 'diagnosis' | 'shop' | 'cart'
+type Screen = 'land' | 'scanning' | 'diagnosis' | 'shop' | 'cart' | 'store'
 
 const AISLES = [
   { key: 'foundation', label: 'Foundation' },
@@ -192,6 +193,14 @@ export default function App() {
           <span className="bar-tag">instrument for skin · built on YouCam</span>
         )}
 
+        <button
+          className={screen === 'store' ? 'navlink on' : 'navlink'}
+          aria-current={screen === 'store' ? 'page' : undefined}
+          onClick={() => setScreen('store')}
+        >
+          Store
+        </button>
+
         {/* Nothing can be in the bag before a scan, so it stays out of the
             landing entirely rather than sitting there empty. */}
         {screen !== 'land' && (
@@ -259,6 +268,7 @@ export default function App() {
           onAdd={(id) => setCart((c) => ({ ...c, [id]: (c[id] ?? 0) + 1 }))}
         />
       )}
+      {screen === 'store' && <Store />}
       {screen === 'cart' && (
         <Cart cart={cart} shop={shop} onChange={setCart} />
       )}

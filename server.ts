@@ -47,6 +47,7 @@ import {
 } from './src/lib/rank'
 import { judge } from './src/lib/judge'
 import { effectsFor, explainEffects, concealerFrom } from './src/lib/makeup'
+import productsRoute, { ownedProducts } from './api/products'
 
 const PORT = Number(process.env.PORT) || 8787
 const MAX_BYTES = 10 * 1024 * 1024
@@ -280,9 +281,11 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     // Merchant rows join the public feeds rather than replacing them, and
     // ranking treats them identically: a store gets reach by matching the
     // shopper, not by being uploaded.
+    const owned = await ownedProducts().catch(() => [])
     const withStore = (aisle: Aisle, rows: Product[]) => [
       ...rows,
       ...productsForAisle(aisle),
+      ...owned.filter((p) => p.aisle === aisle),
     ]
 
     const shortlists: Record<string, Ranked[]> = {
@@ -403,6 +406,12 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   },
 
   'GET /api/catalogue': async () => json({ garments: GARMENTS }),
+
+  /** Store-owner catalogue. Auth and ownership live in the handler. */
+  'GET /api/products': productsRoute,
+  'POST /api/products': productsRoute,
+  'POST /api/products/import': productsRoute,
+  'DELETE /api/products': productsRoute,
 }
 
 /** Mismatched audience sinks; unisex and unset stay neutral. */
