@@ -17,7 +17,44 @@ Your skin **colour** picks the *shade*. Your skin **condition** picks the
 opposite products: one reads oily and is prescribed matte, the other reads dry
 and is prescribed dewy. The diagnosis changes the product, not just the caption.
 
+Every shade finder online stops at the first half. It matches a colour and
+hands you a list. Nothing you can measure about your face — oiliness, moisture,
+redness, texture, face shape — enters the decision, so the right colour arrives
+in the wrong formula and gets returned or abandoned in a drawer.
+
 That is the whole build. Twelve YouCam endpoints feed one decision.
+
+### The problems this solves
+
+**For the shopper — "will this actually suit me?"**
+Shade finders match a colour and stop. Mirror measures seven skin concerns and
+a face shape too, so the *formula* is prescribed alongside the shade, and every
+product names the reading that chose it. Then it renders that product onto your
+own photo, so the answer is visible rather than promised. One selfie sets a
+reading that every aisle reuses — no re-scan per category.
+
+**For the store — "I have a catalogue, not an engineering team."**
+Most personalisation tools need a developer, a data pipeline and a redesign.
+Here a shop signs in, uploads a spreadsheet or points at a feed it already
+publishes, and its products are ranked against real shoppers within a minute.
+No tagging: colours are measured from the product photos server-side, so a
+merchant never hand-labels "warm beige".
+
+**For the store again — "I don't want to send my customers somewhere else."**
+The SDK puts the whole engine on the retailer's own storefront, ranking *their*
+catalogue. One `<script>` tag, or a headless client if they want their own UI.
+
+**Recommendations you can audit.**
+Ranking is code — colour distance in CIELAB, per-aisle objectives — not a model
+guessing. A language model only picks one product from a shortlist of twelve
+that code already ranked, and writes one sentence. It can never invent a
+product, and when it is absent the app still recommends, labelled as a colour
+match rather than advice.
+
+**A shelf that does not go dark.** Public feeds fail. Each aisle falls back on
+its own, so a dead lipstick feed cannot cost you the foundation match, and a
+committed catalogue of 576 measured products keeps the shelves stocked on a
+fresh checkout with no network at all.
 
 ## What it does
 
@@ -35,6 +72,14 @@ That is the whole build. Twelve YouCam endpoints feed one decision.
 5. **Buy.** Anything a listed store sells can be ordered; the store sees it in
    their dashboard. Feed-only rows are not orderable, because there is no
    merchant to fulfil them.
+
+And on the other side of the counter:
+
+6. **List.** A shop signs in, uploads a spreadsheet or points at a feed it
+   already publishes, and its products are ranked against real shoppers — with
+   colours measured from the photos, not hand-tagged.
+7. **Embed.** Or it skips Mirror entirely and puts the engine on its own
+   storefront with one `<script>` tag, ranking its own catalogue.
 
 ## YouCam APIs used
 
@@ -54,6 +99,34 @@ That is the whole build. Twelve YouCam endpoints feed one decision.
 
 Base URL `https://yce-api-01.makeupar.com`, authenticated with
 `Authorization: Bearer <API_KEY>`.
+
+**What each one decides.** Nothing here is called for display only — every
+response changes a product that gets recommended:
+
+- **`skin-tone-analysis`** is the spine. The measured skin hex becomes an
+  undertone and a depth in CIELAB, which becomes a seasonal palette, which
+  ranks *every* aisle — clothes included. The measured lip colour anchors
+  lipstick ranking so a recommendation flatters the mouth you have.
+- **`skin-analysis`** turns seven concern scores into the **formula**: finish,
+  glow, coverage and under-eye intensities. This is the half other tools skip,
+  and it is why the same matched shade is prescribed matte on oily skin and
+  dewy on dry. It also aims the skincare aisle at what the scan actually
+  flagged.
+- **`face-attr-analysis`** gives face shape, which decides hairstyle ranking,
+  and a detected gender used to *order* the clothes and hair shelves — never to
+  filter them.
+- **`makeup-vto`** renders foundation, lipstick and blush carrying **your**
+  prescribed intensities, so the try-on is your formula in that shade rather
+  than a stock preset.
+- **`cloth-v4`** renders any garment from its own product photo, which is what
+  lets a merchant's uploaded row be tried on minutes after upload.
+  **`cloth`** covers YouCam's template garments, since v4 dropped `template_id`.
+- **`hair-transfer`** and **`look-vto`** render a cut and a whole look in one
+  pass, ranked by the same reading.
+- **`skin-simulation`** shows the same face after a course of treatment — the
+  argument for a skincare product, made on the shopper's own photo.
+- **`file`** uploads the photo once; every task above reuses that id, so a
+  seven-aisle session costs one upload rather than nine.
 
 ### Things that cost real debugging
 
@@ -100,16 +173,43 @@ recommendations, and a fallback is labelled rather than passed off as advice.
 
 ## Merchants
 
-Any shop can list products (`/store`), and uploaded rows join the public feeds
-rather than replacing them, ranked on the same footing: reach comes from
-matching the shopper. Rows without a resolvable colour are rejected with a
-reason, since every ranker sorts on colour. Orders take ids and quantities only
-and are re-priced server-side.
+A shop signs in at `/store` and gets a catalogue, a dashboard and an order book.
+
+**Getting products in.** One at a time through a form, or the whole catalogue
+from an **`.xlsx` or `.csv` upload** — the same spreadsheet a shop already
+keeps. Product photos upload with the row. Column order does not matter, only
+the header names.
+
+**Nothing is hand-tagged.** A merchant supplies a photo and a price; the colour
+is *measured* from the image server-side (chroma-weighted average, decoded with
+sharp) and named. That measurement is what ranking sorts on, which is why a row
+whose colour cannot be resolved is **rejected with a reason** rather than
+stored — an uncoloured row would be noise pretending to be a recommendation.
+
+**Uploaded rows compete, they do not jump the queue.** Merchant products join
+the public feeds and are ranked identically. A store gets reach by matching the
+shopper, not by having uploaded. The same is true of the committed CSV
+catalogue.
+
+**Orders.** Checkout sends ids and quantities only; **every line is re-priced
+server-side**, so a tampered price in the browser changes nothing. Orders are
+split per store — each merchant sees only their own lines, with revenue, units
+and a best-seller table in the Finance tab. Products from public feeds are not
+orderable, because there is no merchant to fulfil them: a bag of only those
+places zero orders and says so rather than failing.
+
+**Ownership is never taken from the request body.** It comes from the signed-in
+session, so a merchant can only ever read or write their own rows.
+
+Stores, their catalogues and their orders persist to disk and are restored on
+boot, so a redeploy does not empty a merchant's shelf.
 
 ## SDK
 
-The same engine drops onto a retailer's own storefront, ranking **their**
-catalogue instead of ours. Full reference: **[docs/sdk.md](docs/sdk.md)**.
+Listing on Mirror asks a shop to send its customers somewhere else. Most will
+not. So the same engine drops onto the retailer's **own** storefront, scanning
+their shopper and ranking **their** catalogue — Mirror becomes infrastructure
+rather than a destination. Full reference: **[docs/sdk.md](docs/sdk.md)**.
 
 One line for the widget — Mirror opens in an overlay over their site:
 
