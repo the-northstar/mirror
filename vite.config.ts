@@ -32,6 +32,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // autoUpdate alone installs the new worker but leaves it waiting until
+        // every tab closes, so a deploy appears to do nothing on a machine that
+        // never fully quits the app. These two hand over immediately.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // API responses are user-specific and unit-metered — never cache them.
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
