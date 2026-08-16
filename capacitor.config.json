@@ -1,0 +1,12 @@
+{
+  "appId": "com.pykero.mirror",
+  "appName": "Mirror",
+  "webDir": "dist",
+  "server": {
+    "url": "https://mirror.pykero.com",
+    "cleartext": false
+  },
+  "android": {
+    "backgroundColor": "#fbfaf7"
+  }
+}

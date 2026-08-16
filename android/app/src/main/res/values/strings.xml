@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mirror</string>
+    <string name="title_activity_main">Mirror</string>
+    <string name="package_name">com.pykero.mirror</string>
+    <string name="custom_url_scheme">com.pykero.mirror</string>
+</resources>

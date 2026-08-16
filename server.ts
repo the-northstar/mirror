@@ -4,6 +4,7 @@
  * Also serves the built frontend and the renders directory, so one process runs
  * the whole app on any host.
  */
+import sharp from 'sharp'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -22,6 +23,7 @@ import {
   type ConcernOut,
   type GarmentCategory,
 } from './src/lib/youcam'
+import { colorName, dominantColor } from './src/lib/color'
 import { formulaFor, paletteFor } from './src/lib/prescription'
 import { GARMENTS } from './src/lib/garments'
 import {
@@ -29,6 +31,7 @@ import {
   createStore,
   listStores,
   loadMakeup,
+  loadClothes,
   loadShopify,
   ordersFor,
   placeOrder,
@@ -90,6 +93,58 @@ async function refresh(name: string, load: () => Promise<Product[]>) {
     if (rows.length) shelves.set(name, { rows, at: Date.now(), fellBack: false })
   } catch {
     // Keep serving what we have.
+  }
+}
+
+/**
+ * Measure each garment's real colour from its own photo.
+ *
+ * Must happen HERE, not in the browser: the ranker sorts on colour server-side,
+ * so a placeholder would have every row ranking as the same grey and the
+ * recommendation would be arbitrary. Cached by URL, and a row we cannot measure
+ * is dropped rather than left as a placeholder.
+ */
+const colorCache = new Map<string, string | null>()
+
+async function measureColors(rows: Product[]): Promise<Product[]> {
+  const out = await Promise.all(
+    rows.map(async (row) => {
+      if (!row.image || row.colorName !== 'unmeasured') return row
+      if (colorCache.has(row.image)) {
+        const hit = colorCache.get(row.image)
+        return hit ? { ...row, hex: hit, colorName: colorName(hit) } : null
+      }
+      try {
+        const res = await fetch(row.image)
+        if (!res.ok) throw new Error(String(res.status))
+        const hex = await averageColor(await res.arrayBuffer())
+        colorCache.set(row.image, hex)
+        return hex ? { ...row, hex, colorName: colorName(hex) } : null
+      } catch {
+        colorCache.set(row.image, null)
+        return null
+      }
+    }),
+  )
+  return out.filter((r): r is Product => r !== null)
+}
+
+/**
+ * Decode to a small bitmap and take the chroma-weighted average.
+ *
+ * sharp rather than canvas: Bun has no createImageBitmap or OffscreenCanvas,
+ * so a canvas implementation here would silently drop every garment.
+ */
+async function averageColor(bytes: ArrayBuffer): Promise<string | null> {
+  try {
+    const { data } = await sharp(Buffer.from(bytes))
+      .resize(24, 24, { fit: 'fill' })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    return dominantColor(new Uint8Array(data))
+  } catch {
+    return null
   }
 }
 
@@ -200,7 +255,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     const shelfRows = shelves.get('clothes')?.rows ?? []
     const fromShelf = shelfRows.find((p) => p.id === garmentId)
     const fromStore = productsForAisle('clothes').find((p) => p.id === garmentId)
-    const product = fromStore ?? fromShelf
+    const owned = await ownedProducts().catch(() => [])
+    const fromOwner = owned.find((p) => p.id === garmentId)
+    const product = fromOwner ?? fromStore ?? fromShelf
     const legacy = GARMENTS.find((g) => g.id === garmentId)
 
     const imageUrl = product?.image ?? (legacy ? absolute(legacy.url, req) : null)
@@ -209,7 +266,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     const url = await tryOnCloth(
       { fileId: modelFileId },
       { url: imageUrl },
-      (legacy?.category as GarmentCategory) ?? 'upper_body',
+      // The feed knows what each garment is; falling back to upper_body would
+      // render a dress as a shirt.
+      ((product?.garmentCategory ?? legacy?.category) as GarmentCategory) ?? 'auto',
       req.signal,
     )
     return json({ url })
@@ -280,14 +339,19 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       shelf('foundation', () => loadMakeup('foundation', req.signal)),
       shelf('lipstick', () => loadMakeup('lipstick', req.signal)),
       shelf('blush', () => loadMakeup('blush', req.signal)),
-      // Two stores, so one dead feed cannot empty the shelf. Kotn and Rothys
-      // both publish plain colour names that resolve to a hex.
+      // dummyjson first: its photos are on a CDN that stays up and each row
+      // declares its garment category. The storefront scrapes stay as a
+      // supplement, so one dead feed cannot empty the shelf.
       shelf('clothes', async () => {
-        const stores = ['us.kotn.com', 'www.rothys.com']
-        const results = await Promise.allSettled(
-          stores.map((s) => loadShopify(s, req.signal)),
-        )
-        return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+        const [primary, extra] = await Promise.allSettled([
+          loadClothes(req.signal),
+          loadShopify('us.kotn.com', req.signal),
+        ])
+        const rows = [
+          ...(primary.status === 'fulfilled' ? primary.value : []),
+          ...(extra.status === 'fulfilled' ? extra.value : []),
+        ]
+        return measureColors(rows)
       }),
     ])
 

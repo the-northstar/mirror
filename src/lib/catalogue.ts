@@ -30,6 +30,8 @@ export interface Product {
   url?: string
   /** Free-text the ranker reads: ingredients, face-shape notes, metal. */
   tags?: string[]
+  /** upper_body / full_body / shoes / outer. Try-on renders wrongly without it. */
+  garmentCategory?: string
 }
 
 const MAKEUP_API = 'https://makeup-api.herokuapp.com/api/v1/products.json'
@@ -121,7 +123,7 @@ export async function loadShopify(
       const hex = namedColorHex(value)
       if (!hex) continue
       out.push({
-        id: `cloth-${p.id}-${slug(value)}`,
+        id: `shopify-${p.id}-${slug(value)}`,
         aisle: 'clothes',
         brand: p.vendor,
         name: p.title,
@@ -130,11 +132,70 @@ export async function loadShopify(
         shadeName: value,
         price: p.variants?.[0] ? Number(p.variants[0].price) || undefined : undefined,
         image: p.images?.[0]?.src,
+        // The storefront does not say what the garment is, so let the engine
+        // classify rather than asserting upper_body and rendering a dress wrong.
+        garmentCategory: 'auto',
         url: `https://${store}/products/${p.handle}`,
       })
     }
   }
   return out
+}
+
+/**
+ * Clothes from dummyjson.
+ *
+ * Chosen over scraping a storefront for two reasons that matter here: the
+ * photos are on a CDN that actually stays up, and each source declares the
+ * garment category, so try-on knows whether a row is upper_body or full_body
+ * instead of guessing. Guessing renders a dress as a shirt.
+ */
+const CLOTHES_SOURCES = [
+  { path: 'mens-shirts', category: 'upper_body', audience: 'men' },
+  { path: 'tops', category: 'upper_body', audience: 'women' },
+  { path: 'womens-dresses', category: 'full_body', audience: 'women' },
+  { path: 'mens-shoes', category: 'shoes', audience: 'men' },
+  { path: 'womens-shoes', category: 'shoes', audience: 'women' },
+] as const
+
+export async function loadClothes(signal?: AbortSignal): Promise<Product[]> {
+  const results = await Promise.allSettled(
+    CLOTHES_SOURCES.map(async (src) => {
+      const res = await fetch(
+        `https://dummyjson.com/products/category/${src.path}?limit=0&select=id,title,price,thumbnail,brand`,
+        { signal },
+      )
+      if (!res.ok) throw new Error(`${src.path} ${res.status}`)
+      const { products } = (await res.json()) as {
+        products: Array<{
+          id: number
+          title: string
+          price: number
+          thumbnail?: string
+          brand?: string
+        }>
+      }
+      return products
+        .filter((p) => p.thumbnail)
+        .map(
+          (p): Product => ({
+            id: `dj-${src.path}-${p.id}`,
+            aisle: 'clothes',
+            brand: p.brand ?? 'Studio',
+            name: p.title,
+            // The real colour is measured from the photo at request time; a
+            // neutral placeholder here would rank as if it were grey.
+            hex: '#9aa0ad',
+            colorName: 'unmeasured',
+            price: p.price,
+            image: p.thumbnail,
+            audience: src.audience,
+            garmentCategory: src.category,
+          }),
+        )
+    }),
+  )
+  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
 }
 
 /**
