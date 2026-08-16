@@ -8,7 +8,6 @@ import { MethodLedger } from './components/MethodLedger'
 import { PointCloudFace } from './components/PointCloudFace'
 import { ProductCheck } from './components/ProductCheck'
 import { ReceiptCard } from './components/ReceiptCard'
-import { ScrambleText } from './components/ScrambleText'
 import { Spotlight } from './components/Spotlight'
 import { SwatchStrip } from './components/SwatchStrip'
 import { useReveal } from './useReveal'
@@ -113,7 +112,7 @@ export function Landing({
             Hackathon submission · 2026
           </p>
           <h1 className="mt-7 font-serif text-[3rem] leading-[0.98] tracking-[-0.03em] sm:text-[4.2rem] lg:text-[4.8rem]">
-            <ScrambleText text="Find what suits you, measured from your own face." />
+            Find what suits you, measured from your own face.
           </h1>
           <p className="mt-8 max-w-md text-[17px] leading-relaxed text-[var(--pencil)]">
             One selfie. Seven measurements. Makeup, clothes, glasses and frames that are chosen —
