@@ -45,7 +45,15 @@ export async function judge(
   try {
     const body = {
       contents: [{ parts: [{ text: prompt(shortlists, context) }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.4 },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.4,
+        // 2.5 models think before answering unless told not to, which cost ~20s
+        // on a request the shopper waits through. The task is pick-one-of-12
+        // per aisle from a list already ranked by code, so there is nothing
+        // here worth reasoning about at that price.
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     }
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
