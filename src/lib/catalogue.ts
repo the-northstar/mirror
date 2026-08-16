@@ -442,7 +442,10 @@ export function addProducts(
     }
 
     added.push({
-      id: `${storeId}-${slug(row.name)}-${added.length}`,
+      // Stable across pushes: keyed by name and shade, not by position in the
+      // batch, so re-sending a catalogue updates rows instead of duplicating
+      // them under new ids.
+      id: `${storeId}-${slug(row.name)}${row.shadeName ? `-${slug(row.shadeName)}` : ''}`,
       aisle: row.aisle,
       brand: row.brand ?? store.name,
       name: row.name,
@@ -459,7 +462,11 @@ export function addProducts(
     })
   }
 
-  storeProducts.set(storeId, [...(storeProducts.get(storeId) ?? []), ...added])
+  // Merge by id rather than append: pushing the same catalogue twice should
+  // update those rows, not stock the shelf with duplicates of everything.
+  const ids = new Set(added.map((p) => p.id))
+  const kept = (storeProducts.get(storeId) ?? []).filter((p) => !ids.has(p.id))
+  storeProducts.set(storeId, [...kept, ...added])
   return { added, rejected }
 }
 
