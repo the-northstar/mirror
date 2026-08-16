@@ -26,29 +26,29 @@ const AISLES = [
     n: '01',
     t: 'Makeup',
     q: 'Foundation must match. Blush, lip and eye must flatter.',
-    api: 'yc/skin-analysis + shade-match',
+    api: 'skin-tone-analysis + makeup-vto',
     colors: ['#E3BFA4', '#C99372', '#A56B4B', '#7E4B32', '#5A3323', '#B8615C'],
   },
   {
     n: '02',
     t: 'Clothing',
     q: 'Undertone and depth set the palette; contrast sets the pairing.',
-    api: 'yc/skin-tone → lab palette',
+    api: 'skin-tone-analysis → Lab palette',
     colors: ['#3E4A3C', '#7C8A6E', '#C9B08A', '#A65E3C', '#2A2622', '#E4DCCB'],
   },
   {
     n: '03',
-    t: 'Glasses',
-    q: 'Face shape decides the rim. Depth decides the metal.',
-    api: 'yc/face-shape',
-    colors: ['#1D1B18', '#5B4633', '#8E7B62', '#B08D57', '#3B4451', '#D8CFC0'],
+    t: 'Skincare',
+    q: 'Aimed at what the scan flagged, not at what sells.',
+    api: 'skin-analysis + skin-simulation',
+    colors: ['#DCE6E2', '#BBD3CB', '#8FA693', '#5A6F62', '#E9E2D6', '#C9B08A'],
   },
   {
     n: '04',
-    t: 'Frames & sun',
-    q: 'Lens tint checked against measured redness and eye area.',
-    api: 'yc/eye-area + concerns',
-    colors: ['#2F2A26', '#6B5138', '#94714A', '#4C5A52', '#8A6B6B', '#E9E2D6'],
+    t: 'Hair & looks',
+    q: 'Face shape decides the cut; the whole look renders in one pass.',
+    api: 'hair-transfer + look-vto',
+    colors: ['#1D1B18', '#3B2A20', '#5B4633', '#8E7B62', '#B08D57', '#D8CFC0'],
   },
 ]
 
@@ -107,13 +107,16 @@ API key    mk_own-9988…      (secret)`,
   },
 ]
 
+/** The real YouCam task names, so this reads as a build rather than a mockup. */
 const CHIPS = [
-  'POST /skin-analysis',
-  'POST /skin-tone',
-  'POST /face-shape',
-  'POST /shade-match',
-  'POST /try-on/render',
-  'GET /catalog/products',
+  'task/skin-tone-analysis',
+  'task/skin-analysis',
+  'task/face-attr-analysis',
+  'task/makeup-vto',
+  'task/cloth-v4',
+  'task/hair-transfer',
+  'task/look-vto',
+  'task/skin-simulation',
 ]
 
 export function Landing({
@@ -150,7 +153,7 @@ export function Landing({
             Find what suits you, measured from your own face.
           </h1>
           <p className="mt-8 max-w-md text-[17px] leading-relaxed text-[var(--pencil)]">
-            One selfie. Seven measurements. Makeup, clothes, glasses and frames that are chosen —
+            One selfie. Seven measurements. Makeup, skincare, clothes and hair that are chosen —
             not guessed.
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-4">
@@ -312,8 +315,8 @@ export function Landing({
       {/* 8 — By the numbers */}
       <section className="mx-auto max-w-[1400px] px-6 pb-28 sm:px-10">
         <div ref={numbersRef} className="reveal grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
-          <Counter to={6} label="YouCam endpoints" />
-          <Counter to={3975} label="Products indexed" />
+          <Counter to={12} label="YouCam endpoints" />
+          <Counter to={1900} suffix="+" label="Products ranked" />
           <Counter to={7} label="Skin concerns read" />
           <Counter to={0} label="Hand-tagged colours" />
         </div>
@@ -354,7 +357,7 @@ export function Landing({
             Under the panel
           </p>
           <h2 className="mt-5 max-w-2xl font-serif text-4xl leading-[1.05] tracking-[-0.02em] text-[color-mix(in_oklab,var(--paper)_92%,transparent)] sm:text-5xl">
-            Six calls. No colour tagged by hand.
+            Twelve calls. No colour tagged by hand.
           </h2>
           <div className="mt-12 flex flex-wrap gap-3">
             {CHIPS.map((c) => (

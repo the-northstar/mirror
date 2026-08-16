@@ -5,6 +5,9 @@
 Mirror reads one selfie and shops for you. Every product it shows names the
 measurement that chose it, and you can see most of them on your own face.
 
+**Live: [mirror.pykero.com](https://mirror.pykero.com)** — no sign-in needed to
+scan and shop. Android APK: [`mirror.apk`](mirror.apk).
+
 ## The idea
 
 Skin has two separate properties, and shops only ever use one of them.
@@ -14,7 +17,7 @@ Your skin **colour** picks the *shade*. Your skin **condition** picks the
 opposite products: one reads oily and is prescribed matte, the other reads dry
 and is prescribed dewy. The diagnosis changes the product, not just the caption.
 
-That is the whole build. Nine YouCam endpoints feed one decision.
+That is the whole build. Twelve YouCam endpoints feed one decision.
 
 ## What it does
 
@@ -23,12 +26,15 @@ That is the whole build. Nine YouCam endpoints feed one decision.
 2. **Diagnose.** Colour becomes an undertone, a depth and a seasonal palette.
    Concerns become a formula: glow, coverage and under-eye intensities, each
    printed with the reading that produced it.
-3. **Shop.** Six aisles, each ranked by a different question, because they are
-   asking different things. Foundation must *match* your skin; blush and
+3. **Shop.** Seven aisles, each ranked by a different question, because they
+   are asking different things. Foundation must *match* your skin; blush and
    clothes must *flatter* it; skincare aims at what your scan flagged.
-4. **Try on.** Foundation, lipstick, blush, clothes and hair render on your own
-   photo. The makeup render carries *your* prescribed intensities, so it is
-   your formula in that shade rather than a preset.
+4. **Try on.** Foundation, lipstick, blush, clothes, hair and whole looks
+   render on your own photo. The makeup render carries *your* prescribed
+   intensities, so it is your formula in that shade rather than a preset.
+5. **Buy.** Anything a listed store sells can be ordered; the store sees it in
+   their dashboard. Feed-only rows are not orderable, because there is no
+   merchant to fulfil them.
 
 ## YouCam APIs used
 
@@ -42,7 +48,9 @@ That is the whole build. Nine YouCam endpoints feed one decision.
 | `POST /s2s/v2.0/task/cloth-v4` | A garment photo rendered on the shopper |
 | `POST /s2s/v2.0/task/cloth` | Template garments (v4 dropped `template_id`) |
 | `POST /s2s/v2.1/task/hair-transfer` | A hairstyle rendered on the shopper |
-| `GET /s2s/v2.x/task/template/*` | YouCam's own garment and hair catalogues |
+| `POST /s2s/v2.0/task/look-vto` | A whole look applied in one pass |
+| `POST /s2s/v2.0/task/skin-simulation` | The same face after a course of treatment |
+| `GET /s2s/v2.x/task/template/*` | YouCam's own garment, look and hair catalogues |
 
 Base URL `https://yce-api-01.makeupar.com`, authenticated with
 `Authorization: Bearer <API_KEY>`.

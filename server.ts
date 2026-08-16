@@ -779,6 +779,26 @@ function absolute(path: string, req: Request): string {
 }
 
 const DIST = 'dist'
+
+/**
+ * Cache policy.
+ *
+ * Asset filenames carry a content hash, so they can be cached forever: a new
+ * build produces a new name. index.html must NOT be, because it is the file
+ * that names those assets. Without this the browser keeps yesterday's HTML,
+ * which points at yesterday's bundle, and a deploy looks like it did nothing.
+ */
+function cacheHeaders(path: string): Record<string, string> {
+  if (path.startsWith('/assets/')) {
+    return { 'Cache-Control': 'public, max-age=31536000, immutable' }
+  }
+  // The shell and the worker decide what everything else loads, so they are
+  // revalidated every time.
+  if (/\.(html|webmanifest)$|sw\.js$|workbox-.*\.js$/.test(path) || path === '/') {
+    return { 'Cache-Control': 'no-cache, must-revalidate' }
+  }
+  return { 'Cache-Control': 'public, max-age=3600' }
+}
 const MIME: Record<string, string> = {
   html: 'text/html',
   js: 'text/javascript',
@@ -850,12 +870,17 @@ Bun.serve({
     if (await file.exists()) {
       const ext = path.split('.').pop() ?? ''
       return new Response(file, {
-        headers: { 'Content-Type': MIME[ext] ?? 'application/octet-stream' },
+        headers: {
+          'Content-Type': MIME[ext] ?? 'application/octet-stream',
+          ...cacheHeaders(path),
+        },
       })
     }
     const index = Bun.file(join(DIST, 'index.html'))
     return (await index.exists())
-      ? new Response(index, { headers: { 'Content-Type': 'text/html' } })
+      ? new Response(index, {
+          headers: { 'Content-Type': 'text/html', ...cacheHeaders('/') },
+        })
       : new Response('Run "bun run build" first.', { status: 404 })
   },
 })
