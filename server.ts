@@ -162,7 +162,12 @@ function fail(err: unknown, where: string): Response {
       : new YouCamError(String((err as Error)?.message ?? err), 'Unknown')
   const { owner, message } = faultOf(e.code)
   console.error(`[${where}] ${e.code}: ${e.message}`)
-  return json({ error: message, code: e.code, owner }, owner === 'shopper' ? 400 : 502)
+  // Never answer 502: Cloudflare and Traefik treat it as the origin being
+  // broken and replace this JSON body with their own HTML error page, which
+  // the client then fails to parse ("Unexpected token '<'"). 500 is passed
+  // through untouched and is truthful — the upstream call failed, not the
+  // gateway.
+  return json({ error: message, code: e.code, owner }, owner === 'shopper' ? 400 : 500)
 }
 
 async function readImage(req: Request): Promise<File> {
