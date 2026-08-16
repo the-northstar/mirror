@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Camera } from './Camera'
-import { Studio } from './Studio'
 import { Landing } from './landing/Landing'
 import { normalizeImage } from './lib/image'
 import { fileToDataUrl, loadScans, removeScan, saveScan, type PastScan } from './lib/history'
@@ -52,16 +51,15 @@ const AISLES = [
   { key: 'lipstick', label: 'Lipstick' },
   { key: 'blush', label: 'Blush' },
   { key: 'skincare', label: 'Skincare' },
+  { key: 'hair', label: 'Hair' },
   { key: 'clothes', label: 'Clothes' },
 ]
 
 /** Studio aisles render on the canvas instead of listing products. */
-/**
- * Hair is the only aisle with nothing to sell: YouCam renders the cut, but no
- * feed carries the product. Clothes is NOT here, because it has a real shelf
- * and its try-on belongs inside that aisle rather than beside it.
- */
-const STUDIOS = [{ key: 'hair', label: 'Hair' }] as const
+
+/** Aisles YouCam can render, and the makeup subset that shares one payload. */
+const MAKEUP_AISLES = ['foundation', 'lipstick', 'blush']
+const RENDERABLE = [...MAKEUP_AISLES, 'clothes', 'hair']
 
 const CONCERN_LABEL: Record<string, string> = {
   oiliness: 'Oiliness', moisture: 'Moisture', redness: 'Redness', acne: 'Acne',
@@ -312,7 +310,6 @@ export default function App() {
         <ShopView
           shop={shop}
           reading={reading}
-          photo={photo}
           onAdd={(id) => setCart((c) => ({ ...c, [id]: (c[id] ?? 0) + 1 }))}
         />
       )}
@@ -517,22 +514,23 @@ const AISLE_BLURB: Record<string, string> = {
   blush: 'Ranked against your palette',
   skincare: 'Aimed at what your scan flagged',
   clothes: 'Try them on, and colours that suit your undertone',
-  hair: 'See cuts on your own photo',
+  hair: 'Cuts rendered on your own photo',
 }
 
 function ShopView({
   shop,
   reading,
-  photo,
   onAdd,
 }: {
   shop: Shop | null
   reading: Reading
-  photo: string | null
   onAdd: (id: string) => void
 }) {
   // Null means "not chosen yet", which is what shows the chooser.
   const [aisle, setAisle] = useState<string | null>(null)
+  // Shelves run to hundreds of rows, so they arrive a page at a time.
+  const PAGE = 24
+  const [shown, setShown] = useState(PAGE)
 
   if (!shop) {
     return (
@@ -547,10 +545,9 @@ function ShopView({
     )
   }
 
-  const available = [
-    ...AISLES.filter((a) => (shop.shortlists[a.key]?.length ?? 0) > 0),
-    ...STUDIOS.map((s) => ({ key: s.key as string, label: s.label })),
-  ]
+  const available = AISLES.filter(
+    (a) => (shop.shortlists[a.key]?.length ?? 0) > 0,
+  )
 
   // Choose what you are shopping for first; a wall of foundation is not a
   // starting point when six other aisles are ranked and waiting.
@@ -609,7 +606,10 @@ function ShopView({
         <h2 className="display h-lg">
           {available.find((a) => a.key === aisle)?.label ?? 'Chosen for you'}
         </h2>
-        <p className="tiny">{AISLE_BLURB[aisle] ?? ''}</p>
+        <p className="tiny">
+          {AISLE_BLURB[aisle] ?? ''}
+          {items.length > 0 && ` · ${items.length} ranked for you`}
+        </p>
       </section>
 
       <nav className="aisles" aria-label="Categories">
@@ -618,65 +618,29 @@ function ShopView({
             key={a.key}
             className={aisle === a.key ? 'aisle on' : 'aisle'}
             aria-current={aisle === a.key}
-            onClick={() => setAisle(a.key)}
+            onClick={() => {
+              setAisle(a.key)
+              setShown(PAGE)
+            }}
           >
             {a.label}
           </button>
         ))}
-        {STUDIOS.map((s) => (
-          <button
-            key={s.key}
-            className={aisle === s.key ? 'aisle on studio-tab' : 'aisle studio-tab'}
-            aria-current={aisle === s.key}
-            onClick={() => setAisle(s.key)}
-          >
-            {s.label}
-          </button>
-        ))}
       </nav>
 
-      {/* One try-on surface for every aisle that can render, so the canvas
-          behaves the same whether you are trying a shade or a garment. */}
-      {['clothes', 'hair', 'foundation', 'lipstick', 'blush'].includes(aisle) && (
-        <Studio
-          kind={
-            aisle === 'clothes' ? 'cloth' : aisle === 'hair' ? 'hair' : 'makeup'
-          }
-          makeupEffects={shop.makeup.effects}
-          effectCategory={
-            aisle === 'lipstick' ? 'lip_color' : aisle === 'blush' ? 'blush' : 'foundation'
-          }
-          fileId={reading.fileId}
-          photo={photo}
-          products={(shop.shortlists[aisle] ?? []).map((p) => ({
-            id: p.id,
-            name: p.shadeName ?? p.name,
-            brand: p.brand,
-            image: p.image,
-            hex: p.hex,
-          }))}
-          formulaNote={
-            aisle === 'clothes'
-              ? `Ranked against your ${shop.palette.season} palette.`
-              : aisle === 'hair'
-                ? undefined
-                : shop.makeup.explain
-          }
-        />
-      )}
-
-      {aisle !== 'hair' && (
-        <>
+      <>
       <p className="aisle-note">
-        {aisle === 'foundation' || aisle === 'lipstick' ? (
+        {MAKEUP_AISLES.includes(aisle) ? (
           <>
             Try-on renders your prescribed formula, not a preset: the
             intensities come from your scan.
           </>
+        ) : aisle === 'clothes' ? (
+          <>Try any of these on your own photo.</>
         ) : (
           <>
-            No try-on here. YouCam renders makeup, clothes and hair, so we only
-            offer it where it would actually be your face, not a guess.
+            Skincare has nothing to render: a serum has no visible application,
+            so these are ranked by what your scan flagged instead.
           </>
         )}
       </p>
@@ -690,7 +654,7 @@ function ShopView({
       )}
 
       <div className="grid-3">
-        {items.map((p) => (
+        {items.slice(0, shown).map((p) => (
           <ProductCard
             key={p.id}
             product={p}
@@ -702,8 +666,17 @@ function ShopView({
           />
         ))}
       </div>
-        </>
+
+      {items.length > shown && (
+        <button
+          className="btn btn-quiet more-btn"
+          onClick={() => setShown((n) => n + PAGE)}
+        >
+          Show {Math.min(PAGE, items.length - shown)} more
+          <span className="tiny"> · {items.length - shown} left</span>
+        </button>
       )}
+      </>
     </main>
   )
 }
@@ -723,10 +696,8 @@ function ProductCard({
   reading: Reading
   makeupEffects: unknown[]
 }) {
-  // What YouCam can actually paint on a face. Clothes and hair render in the
-  // Studio instead, where the whole photo is the canvas.
-  const MAKEUP_AISLES = ['foundation', 'lipstick', 'blush']
-  const canTryOn = MAKEUP_AISLES.includes(product.aisle)
+  // Everything YouCam can render gets a button on its own card.
+  const canTryOn = RENDERABLE.includes(product.aisle)
 
   return (
     <article className={featured ? 'product featured' : 'product'}>
@@ -769,6 +740,12 @@ function ProductCard({
  * Try-on is only offered where it can actually render. An unconditional button
  * would post jewellery to the clothes route and render a necklace as a shirt.
  */
+/**
+ * Try-on, on the card itself.
+ *
+ * Every aisle that YouCam can render gets the same control, and the result
+ * appears in the card so the shade and the render sit together.
+ */
 function TryOnButton({
   fileId,
   effects,
@@ -786,18 +763,49 @@ function TryOnButton({
     setBusy(true)
     setErr(null)
     try {
-      // Swap the shade being previewed into the prescribed effect list, so the
-      // render still carries her measured intensities.
-      const tuned = (effects as Array<Record<string, any>>).map((e) =>
-        e.category === (product.aisle === 'lipstick' ? 'lip_color' : 'foundation')
-          ? { ...e, palettes: [{ ...e.palettes[0], color: product.hex }] }
-          : e,
-      )
-      const res = await fetch('/api/tryon/makeup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId, effects: tuned }),
-      })
+      const isGarment = product.aisle === 'clothes'
+      const isHair = product.aisle === 'hair'
+      const isMakeup = MAKEUP_AISLES.includes(product.aisle)
+
+      let res: Response
+      if (isHair) {
+        // The id IS YouCam's template id, so nothing user-supplied is fetched.
+        res = await fetch('/api/tryon/hair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId, templateId: product.id }),
+        })
+      } else if (isGarment) {
+        // The server resolves the image by id, so the browser never chooses
+        // which host we fetch from.
+        res = await fetch('/api/tryon/cloth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modelFileId: fileId, garmentId: product.id }),
+        })
+      } else if (isMakeup) {
+        // Swap this shade into the prescribed effects, so the render is still
+        // her formula rather than a preset.
+        const category =
+          product.aisle === 'lipstick'
+            ? 'lip_color'
+            : product.aisle === 'blush'
+              ? 'blush'
+              : 'foundation'
+        const tuned = (effects as Array<Record<string, any>>).map((e) =>
+          e.category === category
+            ? { ...e, palettes: [{ ...e.palettes[0], color: product.hex }] }
+            : e,
+        )
+        res = await fetch('/api/tryon/makeup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId, effects: tuned }),
+        })
+      } else {
+        throw new Error('This one cannot be rendered.')
+      }
+
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error ?? 'Try-on failed.')
       setUrl(body.url)

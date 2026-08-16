@@ -1536,3 +1536,11 @@
   border-radius: 8px;
   border: 1px solid rgb(22 26 23 / 0.1);
 }
+
+/* Pagination: a shelf of 500 arrives a page at a time. */
+.more-btn {
+  width: auto;
+  justify-self: center;
+  margin-top: 6px;
+  min-width: 220px;
+}

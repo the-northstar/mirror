@@ -45,6 +45,7 @@ import {
   rankByPalette,
   rankFoundation,
   rankSkincare,
+  JUDGE_SLICE,
   type Ranked,
 } from './src/lib/rank'
 import { judge } from './src/lib/judge'
@@ -384,7 +385,29 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       ...productsForAisle(aisle),
     ]
 
+    // Hair templates are YouCam's own catalogue, shaped as products so the
+    // aisle behaves like the others. Ordered by the detected gender when we
+    // have one, never filtered by it.
+    const hair = await hairTemplates(20)
+      .then(({ templates }) =>
+        templates.map(
+          (h): Ranked => ({
+            id: h.id,
+            aisle: 'hair' as never,
+            brand: h.category_name,
+            name: h.title,
+            hex: '#e8e4dd',
+            colorName: 'neutral',
+            image: h.thumb,
+            score: 0,
+            reason: `A ${h.category_name.toLowerCase()} cut from YouCam's own style catalogue.`,
+          }),
+        ),
+      )
+      .catch(() => [])
+
     const shortlists: Record<string, Ranked[]> = {
+      hair,
       foundation: rankFoundation(withStore('foundation', foundations), skinHex),
       lipstick: rankByPalette(withStore('lipstick', lipsticks), palette),
       blush: rankByPalette(withStore('blush', blushes), palette),
@@ -402,8 +425,12 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       }
     }
 
+    // The model sees a slice; the shopper sees the whole shelf.
+    const forJudge = Object.fromEntries(
+      Object.entries(shortlists).map(([k, v]) => [k, v.slice(0, JUDGE_SLICE)]),
+    )
     const verdict = await judge(
-      shortlists,
+      forJudge,
       {
         undertone: palette.undertone,
         season: palette.season,

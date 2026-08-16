@@ -18,7 +18,20 @@ export interface Ranked extends Product {
   reason: string
 }
 
-export const SHORTLIST = 12
+/**
+ * Nothing is truncated: the shopper gets the whole ranked shelf and the UI
+ * paginates it. The old cap was the LLM judge's limit leaking into the
+ * browse experience, which is a different problem with a different answer.
+ */
+/**
+ * A bound, not a shelf size: the near-duplicate and per-brand passes need
+ * something finite to stop at. It is far above what any aisle holds, so the
+ * shopper still gets every distinct product and the UI paginates them.
+ */
+export const SHORTLIST = 500
+
+/** What the model is shown, so the prompt stays small enough to work. */
+export const JUDGE_SLICE = 12
 
 /** ΔE below this is the same colour to the eye. */
 const DUPLICATE_DE = 1.5
