@@ -4,12 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npm run build && node --experimental-strip-types --watch server.js",
+    "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "dev:web": "vite",
-    "start": "node --experimental-strip-types server.js"
+    "start": "bun server.ts",
+    "api": "bun --hot server.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "react": "^19.2.8",

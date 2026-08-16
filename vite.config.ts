@@ -48,4 +48,10 @@ export default defineConfig({
       devOptions: { enabled: true },
     }),
   ],
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8787',
+      '/generated': 'http://localhost:8787',
+    },
+  },
 })
