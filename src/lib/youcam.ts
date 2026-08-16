@@ -271,6 +271,44 @@ export const tryOnMakeup = (
     { signal },
   ).then((r) => r.url)
 
+export interface ClothTemplate {
+  id: string
+  thumb: string
+  title: string
+  category_name: string
+}
+
+/**
+ * YouCam's own garment catalogue.
+ *
+ * A free GET, and the templates are the exact garments the engine renders, so
+ * a recommendation can point at the real thing rather than an approximation.
+ */
+export const clothTemplates = (pageSize = 20, token?: string) =>
+  call<{ templates: ClothTemplate[]; next_token?: string }>(
+    `/s2s/v2.0/task/template/cloth?page_size=${pageSize}${token ? `&starting_token=${token}` : ''}`,
+  )
+
+/**
+ * Template-based clothes try-on.
+ *
+ * Note this is /task/cloth, not cloth-v4: v4 dropped template_id and requires
+ * a reference image, so templates only work on the v2 endpoint. Verified live.
+ */
+export const tryOnClothTemplate = (
+  src: { fileId?: string; url?: string },
+  templateId: string,
+  signal?: AbortSignal,
+) =>
+  runTask<{ url: string }>(
+    'cloth',
+    {
+      ...(src.fileId ? { src_file_id: src.fileId } : { src_file_url: src.url }),
+      template_id: templateId,
+    },
+    { signal },
+  ).then((r) => r.url)
+
 export interface HairTemplate {
   id: string
   thumb: string

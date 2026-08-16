@@ -11,7 +11,9 @@ import {
   analyzeFace,
   analyzeTone,
   faultOf,
+  clothTemplates,
   hairTemplates,
+  tryOnClothTemplate,
   tryOnCloth,
   tryOnHair,
   tryOnMakeup,
@@ -202,6 +204,19 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   },
 
   'GET /api/hair/templates': async () => json(await hairTemplates(20)),
+
+  'GET /api/cloth/templates': async () => json(await clothTemplates(20)),
+
+  /** Template try-on: the id is YouCam's own, so nothing user-supplied is fetched. */
+  'POST /api/tryon/cloth-template': async (req) => {
+    const { fileId, templateId } = (await req.json()) as {
+      fileId?: string
+      templateId?: string
+    }
+    if (!fileId || !templateId) return json({ error: 'Missing photo or style.' }, 400)
+    const url = await tryOnClothTemplate({ fileId }, templateId, req.signal)
+    return json({ url })
+  },
 
   'POST /api/tryon/hair': async (req) => {
     const { fileId, templateId } = (await req.json()) as {

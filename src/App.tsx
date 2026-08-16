@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Camera } from './Camera'
+import { Studio } from './Studio'
 import './App.css'
 
 /* -- Types mirroring the API ------------------------------------------- */
@@ -50,6 +51,12 @@ const AISLES = [
   { key: 'glasses', label: 'Glasses' },
   { key: 'jewellery', label: 'Jewellery' },
 ]
+
+/** Studio aisles render on the canvas instead of listing products. */
+const STUDIOS = [
+  { key: 'cloth', label: 'Clothes try-on' },
+  { key: 'hair', label: 'Hair try-on' },
+] as const
 
 const CONCERN_LABEL: Record<string, string> = {
   oiliness: 'Oiliness', moisture: 'Moisture', redness: 'Redness', acne: 'Acne',
@@ -158,6 +165,7 @@ export default function App() {
         <ShopView
           shop={shop}
           reading={reading}
+          photo={photo}
           onAdd={(id) => setCart((c) => ({ ...c, [id]: (c[id] ?? 0) + 1 }))}
         />
       )}
@@ -408,10 +416,12 @@ function Diagnosis({
 function ShopView({
   shop,
   reading,
+  photo,
   onAdd,
 }: {
   shop: Shop | null
   reading: Reading
+  photo: string | null
   onAdd: (id: string) => void
 }) {
   const [aisle, setAisle] = useState('foundation')
@@ -450,8 +460,33 @@ function ShopView({
             {a.label}
           </button>
         ))}
+        {STUDIOS.map((s) => (
+          <button
+            key={s.key}
+            className={aisle === s.key ? 'aisle on studio-tab' : 'aisle studio-tab'}
+            aria-current={aisle === s.key}
+            onClick={() => setAisle(s.key)}
+          >
+            {s.label}
+          </button>
+        ))}
       </nav>
 
+      {(aisle === 'cloth' || aisle === 'hair') && (
+        <Studio
+          kind={aisle}
+          fileId={reading.fileId}
+          photo={photo}
+          formulaNote={
+            aisle === 'cloth'
+              ? `Styles are ranked against your ${shop.palette.season} palette.`
+              : undefined
+          }
+        />
+      )}
+
+      {aisle !== 'cloth' && aisle !== 'hair' && (
+        <>
       <p className="aisle-note">
         {aisle === 'foundation' || aisle === 'lipstick' ? (
           <>
@@ -487,6 +522,8 @@ function ShopView({
           />
         ))}
       </div>
+        </>
+      )}
     </main>
   )
 }
