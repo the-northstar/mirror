@@ -7,8 +7,6 @@ export type Aisle =
   | 'blush'
   | 'skincare'
   | 'clothes'
-  | 'glasses'
-  | 'jewellery'
 
 /** Who a product is cut for. Unset means it suits anyone. */
 export type Audience = 'women' | 'men' | 'unisex'
@@ -174,18 +172,6 @@ export function namedColorHex(value: string): string | null {
  * foundation match.
  */
 export const SNAPSHOT: Record<string, Product[]> = {
-  glasses: [
-    g('round-tort', 'Bailey Nelson', 'Cooper round', '#6b4a35', ['round', 'square face', 'heart face']),
-    g('square-blk', 'Warby Parker', 'Percey square', '#1a1a1a', ['square', 'round face', 'oval face']),
-    g('cateye-hny', 'Gentle Monster', 'Lilit cat-eye', '#b08d57', ['cat-eye', 'round face', 'oval face']),
-    g('aviator-gld', 'Ray-Ban', 'Classic aviator', '#c9a227', ['aviator', 'square face', 'oval face']),
-  ],
-  jewellery: [
-    j('gold-hoop', 'Missoma', 'Small gold hoops', '#c9a227', ['gold', 'warm']),
-    j('silver-chain', 'Monica Vinader', 'Silver chain', '#c0c0c0', ['silver', 'cool']),
-    j('rose-pend', 'Astley Clarke', 'Rose gold pendant', '#c98a95', ['rose gold', 'warm', 'neutral']),
-    j('pearl-drop', 'Otiumberg', 'Pearl drops', '#efe6d2', ['pearl', 'cool', 'neutral']),
-  ],
   skincare: [
     s('niacinamide', 'The Ordinary', 'Niacinamide 10% + Zinc', ['oiliness', 'pore', 'acne']),
     s('haluronic', 'The Inkey List', 'Hyaluronic Acid Serum', ['moisture', 'texture']),
@@ -196,12 +182,6 @@ export const SNAPSHOT: Record<string, Product[]> = {
   ],
 }
 
-function g(id: string, brand: string, name: string, hex: string, tags: string[]): Product {
-  return { id, aisle: 'glasses', brand, name, hex, colorName: colorName(hex), tags }
-}
-function j(id: string, brand: string, name: string, hex: string, tags: string[]): Product {
-  return { id, aisle: 'jewellery', brand, name, hex, colorName: colorName(hex), tags }
-}
 function s(id: string, brand: string, name: string, tags: string[]): Product {
   return { id, aisle: 'skincare', brand, name, hex: '#e8e4dd', colorName: 'neutral', tags }
 }

@@ -40,8 +40,6 @@ import {
 import {
   rankByPalette,
   rankFoundation,
-  rankGlasses,
-  rankJewellery,
   rankSkincare,
   type Ranked,
 } from './src/lib/rank'
@@ -197,13 +195,21 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     }
     if (!modelFileId) return json({ error: 'Missing model photo.' }, 400)
 
-    const garment = GARMENTS.find((g) => g.id === garmentId)
-    if (!garment) return json({ error: 'Unknown garment.' }, 400)
+    // Resolve by id against what is actually on the shelf, never from the
+    // request body, or the browser could point this server at any host.
+    const shelfRows = shelves.get('clothes')?.rows ?? []
+    const fromShelf = shelfRows.find((p) => p.id === garmentId)
+    const fromStore = productsForAisle('clothes').find((p) => p.id === garmentId)
+    const product = fromStore ?? fromShelf
+    const legacy = GARMENTS.find((g) => g.id === garmentId)
+
+    const imageUrl = product?.image ?? (legacy ? absolute(legacy.url, req) : null)
+    if (!imageUrl) return json({ error: 'Unknown garment.' }, 400)
 
     const url = await tryOnCloth(
       { fileId: modelFileId },
-      { url: absolute(garment.url, req) },
-      garment.category as GarmentCategory,
+      { url: imageUrl },
+      (legacy?.category as GarmentCategory) ?? 'upper_body',
       req.signal,
     )
     return json({ url })
@@ -301,8 +307,6 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       blush: rankByPalette(withStore('blush', blushes), palette),
       clothes: rankByPalette(withStore('clothes', clothes), palette),
       skincare: rankSkincare(withStore('skincare', SNAPSHOT.skincare), concerns),
-      glasses: rankGlasses(withStore('glasses', SNAPSHOT.glasses), faceShape),
-      jewellery: rankJewellery(withStore('jewellery', SNAPSHOT.jewellery), palette),
     }
 
     // Detected gender demotes mismatched rows rather than removing them: the

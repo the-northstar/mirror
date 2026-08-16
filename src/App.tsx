@@ -52,8 +52,6 @@ const AISLES = [
   { key: 'blush', label: 'Blush' },
   { key: 'skincare', label: 'Skincare' },
   { key: 'clothes', label: 'Clothes' },
-  { key: 'glasses', label: 'Glasses' },
-  { key: 'jewellery', label: 'Jewellery' },
 ]
 
 /** Studio aisles render on the canvas instead of listing products. */
@@ -485,8 +483,6 @@ const AISLE_BLURB: Record<string, string> = {
   blush: 'Ranked against your palette',
   skincare: 'Aimed at what your scan flagged',
   clothes: 'Try them on, and colours that suit your undertone',
-  glasses: 'Frames for your measured face shape',
-  jewellery: 'Metals for your undertone',
   hair: 'See cuts on your own photo',
 }
 
@@ -610,6 +606,17 @@ function ShopView({
           kind={aisle === 'clothes' ? 'cloth' : 'hair'}
           fileId={reading.fileId}
           photo={photo}
+          products={
+            aisle === 'clothes'
+              ? (shop.shortlists.clothes ?? []).map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  brand: p.brand,
+                  image: p.image,
+                  hex: p.hex,
+                }))
+              : []
+          }
           formulaNote={
             aisle === 'clothes'
               ? `Styles are ranked against your ${shop.palette.season} palette.`

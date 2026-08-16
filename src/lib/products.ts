@@ -17,14 +17,17 @@ export interface OwnerProduct extends Product {
   ownerId: string
 }
 
+/**
+ * Only aisles the app can actually act on. Glasses and jewellery were dropped:
+ * YouCam has no render path for either on this key, so a shopper would get a
+ * recommendation she could never see on herself.
+ */
 export const AISLES: Product['aisle'][] = [
   'clothes',
   'foundation',
   'lipstick',
   'blush',
   'skincare',
-  'glasses',
-  'jewellery',
 ]
 
 /** Spreadsheet columns, in the order the template writes them. */

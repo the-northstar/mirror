@@ -132,46 +132,4 @@ export function rankSkincare(products: Product[], concerns: ConcernRow[]): Ranke
     .slice(0, SHORTLIST)
 }
 
-/** Glasses: the merchant's own face-shape note against the measured shape. */
-export function rankGlasses(products: Product[], faceShape?: string): Ranked[] {
-  const shape = faceShape?.toLowerCase()
-  return products
-    .map((p) => {
-      const notes = (p.tags ?? []).map((t) => t.toLowerCase())
-      const suits = shape ? notes.some((n) => n.includes(shape)) : false
-      return {
-        ...p,
-        score: suits ? 0 : 1,
-        reason: suits
-          ? `The maker recommends this frame for ${shape} faces, and your scan measured ${shape}.`
-          : shape
-            ? `Not specifically cut for ${shape} faces, but a safe universal shape.`
-            : 'A universal shape, since no face measurement came back.',
-      }
-    })
-    .sort((a, b) => a.score - b.score)
-    .slice(0, SHORTLIST)
-}
 
-/** Jewellery: metal against undertone first, then stone colour. */
-export function rankJewellery(products: Product[], palette: Palette): Ranked[] {
-  const wants = palette.undertone === 'warm' ? 'gold' : palette.undertone === 'cool' ? 'silver' : null
-
-  return products
-    .map((p) => {
-      const tags = (p.tags ?? []).map((t) => t.toLowerCase())
-      const metalMatch = wants ? tags.some((t) => t.includes(wants)) : true
-      const toneMatch = tags.includes(palette.undertone) || tags.includes('neutral')
-      return {
-        ...p,
-        score: (metalMatch ? 0 : 2) + (toneMatch ? 0 : 1),
-        reason: metalMatch && wants
-          ? `${wants === 'gold' ? 'Gold' : 'Silver'} suits your ${palette.undertone} undertone.`
-          : wants
-            ? `Not the obvious metal for ${palette.undertone} skin, but wearable.`
-            : 'Your neutral undertone carries either metal.',
-      }
-    })
-    .sort((a, b) => a.score - b.score)
-    .slice(0, SHORTLIST)
-}

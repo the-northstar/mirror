@@ -18,17 +18,33 @@ interface Template {
 
 export type StudioKind = 'cloth' | 'hair'
 
+/** A real catalogue garment, renderable because cloth-v4 takes an image URL. */
+export interface StudioProduct {
+  id: string
+  name: string
+  brand: string
+  image?: string
+  hex: string
+}
+
 export function Studio({
   kind,
   fileId,
   photo,
   formulaNote,
+  products = [],
 }: {
   kind: StudioKind
   fileId: string
   photo: string | null
   /** Shown under the canvas so the render still cites the scan that drove it. */
   formulaNote?: string
+  /**
+   * Catalogue garments to offer beside YouCam's templates. cloth-v4 accepts an
+   * arbitrary image URL, so a shop's own product renders exactly like a
+   * built-in style does.
+   */
+  products?: StudioProduct[]
 }) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [category, setCategory] = useState<string | null>(null)
@@ -45,7 +61,7 @@ export function Studio({
         if (!live) return
         const rows: Template[] = d.templates ?? []
         setTemplates(rows)
-        setCategory(rows[0]?.category_name ?? null)
+        setCategory((prev) => prev ?? rows[0]?.category_name ?? null)
       })
       .catch(() => live && setError('Could not load styles.'))
     return () => {
@@ -53,18 +69,43 @@ export function Studio({
     }
   }, [kind])
 
-  const categories = [...new Set(templates.map((t) => t.category_name))]
-  const shown = templates.filter((t) => t.category_name === category)
+  const wearable = products.filter((p) => p.image)
+  const SHOP = 'From the shop'
+  const categories = [
+    ...(wearable.length ? [SHOP] : []),
+    ...new Set(templates.map((t) => t.category_name)),
+  ]
+  const shown =
+    category === SHOP
+      ? wearable.map((p) => ({
+          id: p.id,
+          thumb: p.image!,
+          title: p.name,
+          category_name: SHOP,
+        }))
+      : templates.filter((t) => t.category_name === category)
 
   const apply = async () => {
     if (!selected) return
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch(`/api/tryon/${kind === 'cloth' ? 'cloth-template' : 'hair'}`, {
+      // A shop garment goes through the product route, which resolves the
+      // image by id server-side; a built-in style goes through templates.
+      const isProduct = wearable.some((p) => p.id === selected)
+      const endpoint = kind === 'hair'
+        ? '/api/tryon/hair'
+        : isProduct
+          ? '/api/tryon/cloth'
+          : '/api/tryon/cloth-template'
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId, templateId: selected }),
+        body: JSON.stringify(
+          isProduct
+            ? { modelFileId: fileId, garmentId: selected }
+            : { fileId, templateId: selected },
+        ),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body?.error ?? 'Try-on failed.')

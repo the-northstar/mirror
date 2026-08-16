@@ -1,6 +1,6 @@
 import { expect, test, describe } from 'bun:test'
 import { deltaE, hexToLab, labToRgb, rgbToHex } from './color'
-import { rankFoundation, rankByPalette, rankSkincare, rankGlasses, rankJewellery, SHORTLIST } from './rank'
+import { rankFoundation, rankByPalette, rankSkincare, SHORTLIST } from './rank'
 import { paletteFor, type ConcernRow } from './prescription'
 import { SNAPSHOT, namedColorHex, type Product } from './catalogue'
 
@@ -91,28 +91,6 @@ describe('skincare ranking', () => {
   test('never claims to treat something unmeasured', () => {
     const out = rankSkincare(SNAPSHOT.skincare, [])
     for (const p of out) expect(p.reason).toContain('not aimed at anything')
-  })
-})
-
-describe('glasses ranking', () => {
-  test('uses the measured face shape when there is one', () => {
-    const out = rankGlasses(SNAPSHOT.glasses, 'round')
-    expect(out[0].reason).toContain('round')
-    expect(out[0].tags?.some((t) => t.includes('round'))).toBe(true)
-  })
-
-  test('degrades honestly with no measurement', () => {
-    const out = rankGlasses(SNAPSHOT.glasses, undefined)
-    expect(out[0].reason).toContain('no face measurement')
-  })
-})
-
-describe('jewellery ranking', () => {
-  test('gold leads for warm, silver for cool', () => {
-    const warm = rankJewellery(SNAPSHOT.jewellery, paletteFor('#c49a6c'))
-    expect(warm[0].tags).toContain('gold')
-    const cool = rankJewellery(SNAPSHOT.jewellery, paletteFor('#e8b4a0'))
-    expect(cool[0].tags).toContain('silver')
   })
 })
 
