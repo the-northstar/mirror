@@ -10,7 +10,7 @@
  * A thin layer over the headless client — it owns the overlay and the button,
  * nothing else. Anything it can do, createMirror() can do without the UI.
  */
-import { createMirror, type Reading, type Shop } from './client'
+import { createMirror } from './client'
 
 interface EmbedOptions {
   storeId: string

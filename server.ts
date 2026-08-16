@@ -568,6 +568,13 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     return json({ orders: ordersFor(storeId) })
   },
 
+  /** Which optional layers are live on THIS instance. */
+  'GET /api/health': async () =>
+    json({
+      youcam: Boolean(process.env.YOUCAM_API_KEY),
+      stylist: Boolean(process.env.GEMINI_API_KEY),
+    }),
+
   'GET /api/feeds': async () =>
     json({
       shelves: Object.fromEntries(
@@ -782,6 +789,9 @@ Bun.serve({
 await ownedProducts().catch(() => [])
 await restoreOrdersFromDisk()
 
+console.log(
+  `  stylist layer: ${process.env.GEMINI_API_KEY ? 'on' : 'off (set GEMINI_API_KEY to enable)'}`,
+)
 if (!process.env.YOUCAM_API_KEY) {
   console.warn('\n  !  YOUCAM_API_KEY is not set. Add it to .env.\n')
 }

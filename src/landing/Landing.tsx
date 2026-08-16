@@ -72,19 +72,38 @@ const SHOPKEEPER = [
   },
 ]
 
-/** How a retailer's catalogue gets in. Four routes, one validation. */
-const SDK_FEEDS = [
+/**
+ * The integration as three steps with the actual call under each: a retailer
+ * is deciding whether this is an afternoon or a sprint, and only code answers
+ * that. Kept literal — these are the real routes.
+ */
+const SDK_STEPS = [
   {
-    t: 'A feed you host',
-    d: 'Point us at a products.json or CSV you already publish. Nothing to build.',
+    n: '01',
+    t: 'Create a store',
+    d: 'One call. Returns a store id for your page and a secret key for your server.',
+    code: `curl -X POST https://mirror.pykero.com/api/stores \\
+  -d '{"name":"Acme","contactEmail":"you@acme.com"}'
+
+→ { "id": "store-acme-1", "apiKey": "mk_f80…" }`,
   },
   {
-    t: 'Shopify',
-    d: 'Give us the storefront domain. No app to install, no key to generate.',
+    n: '02',
+    t: 'Send your catalogue',
+    d: 'Point us at a feed you already publish — or push rows when they change.',
+    code: `curl -X POST https://mirror.pykero.com/api/sdk/feed \\
+  -H 'Authorization: Bearer mk_f80…' \\
+  -d '{"url":"https://acme.com/products.json"}'
+
+→ { "added": 128, "rejected": 2 }`,
   },
   {
-    t: 'Push API',
-    d: 'POST your rows with a store key when your catalogue changes.',
+    n: '03',
+    t: 'Add one line',
+    d: 'A button appears on your storefront. Mirror opens over it, in an iframe.',
+    code: `<script
+  src="https://mirror.pykero.com/sdk/mirror.js"
+  data-store="store-acme-1" defer></script>`,
   },
 ]
 

@@ -144,7 +144,21 @@ bun run api               # app and API on :8787
 For frontend hot reload, run `bun run dev` alongside `bun run api`; Vite
 proxies `/api` through.
 
-Requires Bun 1.3+. `GEMINI_API_KEY` is optional and only adds prose.
+Requires Bun 1.3+.
+
+`GEMINI_API_KEY` is optional. Without it the app still recommends, using the
+top colour match, and labels those picks as matches rather than advice. With
+it, a model picks one product per aisle from the shortlist code already ranked
+and writes how they work together. Get a free key at
+https://aistudio.google.com/apikey.
+
+Deployed separately from the repo: set it in the host's environment panel, not
+in a committed file. `GET /api/health` reports which layers are live on an
+instance:
+
+```json
+{ "youcam": true, "stylist": false }
+```
 
 ### Photo requirements
 
