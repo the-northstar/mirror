@@ -886,6 +886,44 @@ function decode(s: string): string {
 
 /* -- Cart --------------------------------------------------------------- */
 
+/**
+ * Reloading /diagnosis or /shop arrives with no reading: the scan is kept but
+ * the prescription is recomputed, never persisted. Offer the saved scans so a
+ * refresh costs a tap rather than another scan.
+ */
+function NoReading({
+  scans,
+  onReopen,
+  onStart,
+}: {
+  scans: PastScan[]
+  onReopen: (s: PastScan) => void
+  onStart: () => void
+}) {
+  return (
+    <main className="wrap">
+      <div className="card empty">
+        <h3>Your reading isn't loaded</h3>
+        <p className="tiny">
+          {scans.length > 0
+            ? 'Re-open your last scan to pick up where you left off. It costs nothing.'
+            : 'Scan your face to get your reading.'}
+        </p>
+        <div className="land-actions">
+          {scans.length > 0 && scans[0] && (
+            <button className="btn" onClick={() => onReopen(scans[0]!)}>
+              Re-open last scan
+            </button>
+          )}
+          <button className="btn btn-quiet" onClick={onStart}>
+            Start a new scan
+          </button>
+        </div>
+      </div>
+    </main>
+  )
+}
+
 function Cart({
   cart,
   lines: saved,
