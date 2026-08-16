@@ -24,7 +24,12 @@ const DIST = 'dist'
 
 const { default: analyze } = await import('./api/analyze.ts')
 const { default: tryon } = await import('./api/tryon.ts')
-const ROUTES = { '/api/analyze': analyze, '/api/tryon': tryon }
+const { default: upload } = await import('./api/upload.ts')
+const ROUTES = {
+  '/api/analyze': analyze,
+  '/api/tryon': tryon,
+  '/api/upload': upload,
+}
 
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',

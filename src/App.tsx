@@ -383,7 +383,12 @@ function BodyPrompt({
       form.append('image', file)
       const res = await fetch('/api/upload', { method: 'POST', body: form })
       const body = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(body?.error ?? 'Upload failed.')
+      if (!res.ok || !body?.fileId) {
+        throw new Error(
+          body?.error ??
+            `Upload did not return a file (HTTP ${res.status}). Run "npm run dev" so the API is served alongside the app.`,
+        )
+      }
       onBody(body.fileId, URL.createObjectURL(file))
     } catch (err) {
       setError((err as Error).message)
