@@ -56,7 +56,11 @@ export interface Shop {
   palette: Reading['palette']
   formula: Reading['formula']
   shortlists: Record<string, RankedProduct[]>
-  picks: Record<string, { productId: string; reason: string }>
+  /** Up to six per aisle, best first. `source: 'match'` means no model answered. */
+  picks: Record<
+    string,
+    Array<{ productId: string; reason: string; source: 'model' | 'match'; rank: number }>
+  >
   together: string
   makeup: { effects: unknown[]; explain: string }
 }

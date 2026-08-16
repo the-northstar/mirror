@@ -39,7 +39,10 @@ interface Shop {
   palette: Reading['palette']
   formula: Reading['formula']
   shortlists: Record<string, RankedItem[]>
-  picks: Record<string, { productId: string; reason: string; source: 'model' | 'match' }>
+  picks: Record<
+    string,
+    Array<{ productId: string; reason: string; source: 'model' | 'match'; rank: number }>
+  >
   together: string
   concealer: { hex: string; from: string; shade?: string } | null
   makeup: { effects: unknown[]; explain: string }
@@ -670,7 +673,14 @@ function ShopView({
   }
 
   const items = shop.shortlists[aisle] ?? []
-  const pick = shop.picks[aisle]
+  // Six per aisle now, so look-up by id rather than comparing against one.
+  const picks = new Map((shop.picks[aisle] ?? []).map((p) => [p.productId, p]))
+  // The stylist's set is the answer to the aisle, so it opens the shelf
+  // instead of being scattered down it wherever colour distance put each one.
+  const ordered = [
+    ...items.filter((p) => picks.has(p.id)).sort((a, b) => picks.get(a.id)!.rank - picks.get(b.id)!.rank),
+    ...items.filter((p) => !picks.has(p.id)),
+  ]
 
   return (
     <main className="wrap stack-lg">
@@ -737,12 +747,12 @@ function ShopView({
       )}
 
       <div className="grid-3">
-        {items.slice(0, shown).map((p) => (
+        {ordered.slice(0, shown).map((p) => (
           <ProductCard
             key={p.id}
             product={p}
-            featured={pick?.productId === p.id}
-            featuredNote={pick?.productId === p.id ? pick : undefined}
+            featured={picks.has(p.id)}
+            featuredNote={picks.get(p.id)}
             onAdd={onAdd}
             reading={reading}
             makeupEffects={shop.makeup.effects}
@@ -765,6 +775,22 @@ function ShopView({
   )
 }
 
+/**
+ * The ribbon says where a recommendation came from, not just that it exists.
+ *
+ * Six of them now, so the badge has to carry a position too — otherwise every
+ * card in the opening row claims to be the best one. A colour match is never
+ * dressed up as advice, which is the same rule the fallback follows: it is
+ * still a full set of recommendations, it just says what it is.
+ */
+function ribbonFor(note?: { source: 'model' | 'match'; rank: number }): string {
+  if (!note) return 'Top pick'
+  if (note.source === 'match') {
+    return note.rank === 1 ? 'Closest match' : `Closest match #${note.rank}`
+  }
+  return note.rank === 1 ? 'Top pick' : `Stylist pick #${note.rank}`
+}
+
 function ProductCard({
   product,
   featured,
@@ -776,7 +802,7 @@ function ProductCard({
 }: {
   product: RankedItem
   featured: boolean
-  featuredNote?: { source: 'model' | 'match'; reason?: string }
+  featuredNote?: { source: 'model' | 'match'; reason?: string; rank: number }
   onAdd: (id: string) => void
   reading: Reading
   makeupEffects: unknown[]
@@ -791,7 +817,7 @@ function ProductCard({
     <article className={featured ? 'product featured' : 'product'}>
       {featured && (
         <span className="ribbon">
-          Top pick{featuredNote?.source === 'match' ? ' (closest match)' : ''}
+          {ribbonFor(featuredNote)}
         </span>
       )}
       <div className="product-media">
