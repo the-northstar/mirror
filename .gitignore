@@ -39,3 +39,6 @@ products.json
 # covers the rest of the native build output.
 android/app/src/main/assets/public
 *.apk
+
+# Store order ledger (file-backed).
+orders.json

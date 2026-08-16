@@ -15,9 +15,16 @@ const MAX_EDGE = 2560
 
 export async function normalizeImage(file: File): Promise<File> {
   const needsConvert = !NATIVE.includes(file.type)
-  const needsShrink = file.size > MAX_BYTES
-
-  if (!needsConvert && !needsShrink) return file
+  if (!needsConvert && file.size <= MAX_BYTES) {
+    // Bytes are not the only cap: the engines reject oversized *dimensions*
+    // too, and a well-compressed phone photo can be 3MB and 6000px wide. That
+    // needs the bitmap to measure, so decode before deciding.
+    const probe = await decode(file).catch(() => null)
+    const oversized =
+      !!probe && Math.max(probe.width, probe.height) > MAX_EDGE
+    probe?.close?.()
+    if (!oversized) return file
+  }
 
   const bitmap = await decode(file)
   try {

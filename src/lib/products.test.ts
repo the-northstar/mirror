@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { normalizeProduct, parseCsv, rowsToProducts } from './products.ts'
+import { normalizeProduct, parseCsv, rowsToProducts, summariseOrders } from './products.ts'
 
 const OK = {
   name: 'Petrol Overshirt',
@@ -17,6 +17,8 @@ test('a valid product is normalised and owner-scoped', () => {
   expect(p.aisle).toBe('clothes')
   expect(p.price).toBe(89)
   expect(p.ownerId).toBe('user_2abcdefgh')
+  // Without a storeId the row is visible in the shop but silently unorderable.
+  expect(p.storeId).toBe('own-abcdefgh')
   // The ranker matches on hex, but the shop prints the name.
   expect(p.colorName).toBeTruthy()
 })
@@ -85,4 +87,29 @@ test('csv parsing survives quotes, commas and newlines in fields', () => {
     ['a'],
     ['say "hi"', 'two\nlines'],
   ])
+})
+
+test('the books roll up per product, best seller first', () => {
+  const line = (id: string, name: string, qty: number, unitPrice: number) => ({
+    product: { id, name } as never,
+    qty,
+    unitPrice,
+  })
+  const f = summariseOrders([
+    { id: 'o1', at: 1, storeId: 's', total: 0, lines: [line('a', 'Shirt', 2, 10), line('b', 'Coat', 1, 60)] },
+    { id: 'o2', at: 2, storeId: 's', total: 0, lines: [line('a', 'Shirt', 3, 10)] },
+  ] as never)
+
+  expect(f.orders).toBe(2)
+  expect(f.units).toBe(6)
+  expect(f.revenue).toBe(110)
+  // Coat outsells Shirt by revenue despite fewer units — that is the ordering.
+  expect(f.byProduct.map((p) => [p.name, p.units, p.revenue])).toEqual([
+    ['Coat', 1, 60],
+    ['Shirt', 5, 50],
+  ])
+})
+
+test('no orders is zero, not a crash or a NaN', () => {
+  expect(summariseOrders([])).toEqual({ revenue: 0, orders: 0, units: 0, byProduct: [] })
 })

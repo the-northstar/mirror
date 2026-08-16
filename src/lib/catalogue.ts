@@ -332,6 +332,18 @@ export function addProducts(
   return { added, rejected }
 }
 
+/**
+ * Products from the signed-in store API, which persists them to disk — the
+ * "shared datastore" the TODO above is waiting on. They land in the same
+ * registry as in-memory merchant uploads so that every resolver (try-on,
+ * orders, the shelves) reads one catalogue instead of three.
+ */
+const OWNER_SHELF = '__owner_products'
+
+export function setOwnerProducts(rows: Product[]): void {
+  storeProducts.set(OWNER_SHELF, rows)
+}
+
 export const productsForAisle = (aisle: Aisle): Product[] =>
   [...storeProducts.values()].flat().filter((p) => p.aisle === aisle)
 
@@ -390,3 +402,14 @@ export function placeOrder(lines: OrderLine[]): Order[] {
 }
 
 export const ordersFor = (storeId: string) => orders.get(storeId) ?? []
+
+/**
+ * Restore persisted orders at boot. Without this the books reset on every
+ * restart, which makes a revenue figure worse than no figure at all.
+ */
+export function restoreOrders(rows: Order[]): void {
+  for (const o of rows) orders.set(o.storeId, [...(orders.get(o.storeId) ?? []), o])
+}
+
+/** Every order across every store, for persistence. */
+export const allOrders = (): Order[] => [...orders.values()].flat()

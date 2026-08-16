@@ -48,7 +48,11 @@ import {
 } from './src/lib/rank'
 import { judge } from './src/lib/judge'
 import { effectsFor, explainEffects, concealerFrom } from './src/lib/makeup'
-import productsRoute, { ownedProducts } from './api/products'
+import productsRoute, {
+  ownedProducts,
+  persistOrders,
+  restoreOrdersFromDisk,
+} from './api/products'
 
 const PORT = Number(process.env.PORT) || 8787
 const MAX_BYTES = 10 * 1024 * 1024
@@ -363,11 +367,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     // Merchant rows join the public feeds rather than replacing them, and
     // ranking treats them identically: a store gets reach by matching the
     // shopper, not by being uploaded.
-    const owned = await ownedProducts().catch(() => [])
     const withStore = (aisle: Aisle, rows: Product[]) => [
       ...rows,
       ...productsForAisle(aisle),
-      ...owned.filter((p) => p.aisle === aisle),
     ]
 
     const shortlists: Record<string, Ranked[]> = {
@@ -476,6 +478,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       return json({ error: 'Your bag is empty.' }, 400)
     }
     const placed = placeOrder(lines)
+    if (placed.length) await persistOrders()
     if (placed.length === 0) {
       return json(
         { error: 'Nothing in your bag can be ordered yet. Only store-listed items ship.' },
@@ -489,6 +492,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
 
   /** Store-owner catalogue. Auth and ownership live in the handler. */
   'GET /api/products': productsRoute,
+  'GET /api/products/orders': productsRoute,
   'POST /api/products': productsRoute,
   'POST /api/products/import': productsRoute,
   'DELETE /api/products': productsRoute,
@@ -559,6 +563,11 @@ Bun.serve({
       : new Response('Run "bun run build" first.', { status: 404 })
   },
 })
+
+// Prime the registry from disk, or try-on cannot resolve a stored product
+// until something else happens to read the store first.
+await ownedProducts().catch(() => [])
+await restoreOrdersFromDisk()
 
 if (!process.env.YOUCAM_API_KEY) {
   console.warn('\n  !  YOUCAM_API_KEY is not set. Add it to .env.\n')

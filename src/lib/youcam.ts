@@ -352,6 +352,8 @@ const SHOPPER_OWNED: Record<string, string> = {
   error_pose: 'Stand facing the camera with your whole body in frame.',
   exceed_max_filesize: 'That photo is too large. Use one under 10MB.',
   error_below_min_image_size: 'That photo is too small for try-on.',
+  error_exceed_max_image_size:
+    'That photo is too large for try-on. Use a smaller one, or retake it.',
   error_nsfw_content_detected: 'That image was rejected by content safety checks.',
 }
 

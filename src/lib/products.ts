@@ -10,7 +10,7 @@
  * type stripper, which does not do bundler-style extension resolution.
  */
 import { colorName } from './color.ts'
-import type { Product } from './catalogue.ts'
+import type { Order, Product } from './catalogue.ts'
 
 export interface OwnerProduct extends Product {
   /** Clerk user id of the store owner who added it. */
@@ -85,6 +85,9 @@ export function normalizeProduct(input: unknown, ownerId: string): OwnerProduct 
     // Owner-scoped id: re-adding the same name updates rather than duplicating,
     // and one owner can never collide with another's product.
     id: `own-${ownerId.slice(-8)}-${slug(name)}`,
+    // Orders group by store and skip rows without one, so the owner is the
+    // store: without this their products are visible but never orderable.
+    storeId: `own-${ownerId.slice(-8)}`,
     aisle,
     brand,
     name,
@@ -180,3 +183,62 @@ export function parseCsv(text: string): string[][] {
 const str = (v: unknown): string => (v == null ? '' : String(v).trim())
 const slug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+/* -- Finance ------------------------------------------------------------- */
+
+export interface ProductSales {
+  id: string
+  name: string
+  units: number
+  revenue: number
+}
+
+export interface Finance {
+  revenue: number
+  orders: number
+  units: number
+  /** Best seller first, so the owner reads the answer before the table. */
+  byProduct: ProductSales[]
+}
+
+/**
+ * Roll a store's orders up into its books.
+ *
+ * Revenue is summed from each line's recorded unitPrice, not from the
+ * product's current price: re-pricing history every time the owner edits a
+ * product would rewrite what was actually charged.
+ */
+export function summariseOrders(orders: Order[]): Finance {
+  const byProduct = new Map<string, ProductSales>()
+  let revenue = 0
+  let units = 0
+
+  for (const order of orders) {
+    for (const line of order.lines) {
+      const row = byProduct.get(line.product.id) ?? {
+        id: line.product.id,
+        name: line.product.name,
+        units: 0,
+        revenue: 0,
+      }
+      row.units += line.qty
+      row.revenue += line.unitPrice * line.qty
+      byProduct.set(row.id, row)
+      units += line.qty
+      revenue += line.unitPrice * line.qty
+    }
+  }
+
+  return {
+    // Money in cents would be better; these are catalogue prices with two
+    // decimals, so round the sum rather than carry float dust into the UI.
+    revenue: Math.round(revenue * 100) / 100,
+    orders: orders.length,
+    units,
+    // Ties break on units then name, so the table cannot reshuffle between
+    // requests for two products that earned the same.
+    byProduct: [...byProduct.values()].sort(
+      (a, b) => b.revenue - a.revenue || b.units - a.units || a.name.localeCompare(b.name),
+    ),
+  }
+}

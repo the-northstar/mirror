@@ -13,7 +13,15 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { verifyToken } from '@clerk/backend'
 import readXlsx from 'read-excel-file/node'
 import {
+  allOrders,
+  ordersFor,
+  restoreOrders,
+  setOwnerProducts,
+  type Order,
+} from '../src/lib/catalogue.ts'
+import {
   normalizeProduct,
+  summariseOrders,
   parseCsv,
   rowsToProducts,
   type OwnerProduct,
@@ -22,16 +30,26 @@ import {
 // ponytail: a JSON file is the whole database. Swap for Postgres when two
 // processes write at once or the catalogue outgrows one file read.
 const STORE = 'products.json'
+const ORDERS = 'orders.json'
 const MAX_SHEET_BYTES = 5 * 1024 * 1024
 
 export const config = { runtime: 'nodejs', maxDuration: 60 }
 
 async function load(): Promise<OwnerProduct[]> {
+  let rows: OwnerProduct[] = []
   try {
-    return JSON.parse(await readFile(STORE, 'utf8'))
+    rows = JSON.parse(await readFile(STORE, 'utf8'))
   } catch {
-    return []
+    rows = []
   }
+  // Rows written before products carried a storeId would be visible in the
+  // shop but silently unorderable, so derive it rather than stranding them.
+  rows = rows.map((r) =>
+    r.storeId ? r : { ...r, storeId: `own-${r.ownerId.slice(-8)}` },
+  )
+  // Republish on every read so a write cannot leave the registry stale.
+  setOwnerProducts(rows)
+  return rows
 }
 
 /** Upsert by id, so re-importing a corrected sheet updates instead of duplicating. */
@@ -40,6 +58,26 @@ async function save(incoming: OwnerProduct[]): Promise<void> {
   const kept = (await load()).filter((p) => !ids.has(p.id))
   await writeFile(STORE, JSON.stringify([...kept, ...incoming], null, 2))
 }
+
+/**
+ * Orders live in a teammate's in-memory map, which empties on restart. The
+ * books have to survive that, so they are mirrored to disk: restored at boot,
+ * rewritten whenever an order is placed.
+ */
+export async function restoreOrdersFromDisk(): Promise<void> {
+  try {
+    restoreOrders(JSON.parse(await readFile(ORDERS, 'utf8')) as Order[])
+  } catch {
+    // No file yet, or it is unreadable: an empty ledger is the right start.
+  }
+}
+
+export async function persistOrders(): Promise<void> {
+  await writeFile(ORDERS, JSON.stringify(allOrders(), null, 2))
+}
+
+/** The owner's own store id, derived from the token — never from the client. */
+const storeIdOf = (ownerId: string) => `own-${ownerId.slice(-8)}`
 
 class HttpError extends Error {
   status: number
@@ -95,6 +133,14 @@ async function gridOf(file: File): Promise<unknown[][]> {
 export default async function handler(req: Request): Promise<Response> {
   try {
     const { pathname } = new URL(req.url)
+
+    if (req.method === 'GET' && pathname.endsWith('/orders')) {
+      const ownerId = await ownerOf(req)
+      // Scoped to the caller's own store: an owner cannot read another's books
+      // by passing a storeId, because no storeId is accepted.
+      const orders = ordersFor(storeIdOf(ownerId))
+      return Response.json({ orders, finance: summariseOrders(orders) })
+    }
 
     if (req.method === 'GET') {
       // Public: shoppers get the products only. A signed-in owner additionally

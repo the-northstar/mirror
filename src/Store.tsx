@@ -17,7 +17,8 @@ import {
   useAuth,
   useUser,
 } from '@clerk/clerk-react'
-import { AISLES, COLUMNS, type OwnerProduct } from './lib/products'
+import { AISLES, COLUMNS, type Finance, type OwnerProduct } from './lib/products'
+import type { Order } from './lib/catalogue'
 import { CLERK_KEY } from './lib/clerk'
 
 type Row = {
@@ -72,6 +73,8 @@ function Owner() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imported, setImported] = useState<string | null>(null)
+  const [orders, setOrders] = useState<Order[]>([])
+  const [finance, setFinance] = useState<Finance | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const call = useCallback(
@@ -95,6 +98,15 @@ function Owner() {
       setListed(products)
     } catch (err) {
       setError((err as Error).message)
+    }
+    // The books are a separate read: a failure there must not blank the
+    // catalogue the owner came here to manage.
+    try {
+      const books = await call('/api/products/orders')
+      setOrders(books.orders)
+      setFinance(books.finance)
+    } catch {
+      /* leave the last figures on screen */
     }
   }, [call])
 
@@ -345,6 +357,82 @@ function Owner() {
       </form>
 
       <section className="stack">
+        <h3>Sales</h3>
+        {!finance || finance.orders === 0 ? (
+          <p className="tiny">
+            No orders yet. They appear here the moment a shopper checks out.
+          </p>
+        ) : (
+          <>
+            <div className="books">
+              <div className="figure">
+                <strong>{money(finance.revenue)}</strong>
+                <span className="tiny">Revenue</span>
+              </div>
+              <div className="figure">
+                <strong>{finance.orders}</strong>
+                <span className="tiny">Order{finance.orders === 1 ? '' : 's'}</span>
+              </div>
+              <div className="figure">
+                <strong>{finance.units}</strong>
+                <span className="tiny">Item{finance.units === 1 ? '' : 's'} sold</span>
+              </div>
+              <div className="figure">
+                <strong>{money(finance.revenue / finance.orders)}</strong>
+                <span className="tiny">Average order</span>
+              </div>
+            </div>
+
+            <table className="ledger">
+              <caption className="tiny">
+                Best seller first. Revenue is what was charged at the time, not
+                today's price.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Product</th>
+                  <th scope="col">Units</th>
+                  <th scope="col">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {finance.byProduct.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.name}</td>
+                    <td>{p.units}</td>
+                    <td>{money(p.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h4>Recent orders</h4>
+            <ul className="orders">
+              {[...orders]
+                .sort((a, b) => b.at - a.at)
+                .slice(0, 10)
+                .map((o) => (
+                  <li key={o.id} className="card order">
+                    <div className="order-head">
+                      <strong>{o.id}</strong>
+                      <span className="tiny">{new Date(o.at).toLocaleString()}</span>
+                      <span className="order-total">{money(o.total)}</span>
+                    </div>
+                    <ul className="tiny">
+                      {o.lines.map((l) => (
+                        <li key={l.product.id}>
+                          {l.qty} × {l.product.name} @ {money(l.unitPrice)}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+            </ul>
+          </>
+        )}
+      </section>
+
+      <section className="stack">
         <h3>On your shelves ({mine.length})</h3>
         {mine.length === 0 ? (
           <p className="tiny">
@@ -374,6 +462,9 @@ function Owner() {
     </main>
   )
 }
+
+const money = (n: number) =>
+  n.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 
 /** The template is the column list itself, so it cannot drift from the parser. */
 function templateHref(): string {
