@@ -17,8 +17,11 @@ import {
   allOrders,
   ordersFor,
   restoreOrders,
+  restoreStores,
   setOwnerProducts,
+  snapshotStores,
   type Order,
+  type StoreSnapshot,
 } from '../src/lib/catalogue.ts'
 import {
   normalizeProduct,
@@ -31,9 +34,18 @@ import {
 
 // ponytail: a JSON file is the whole database. Swap for Postgres when two
 // processes write at once or the catalogue outgrows one file read.
-const STORE = 'products.json'
-const ORDERS = 'orders.json'
-const UPLOADS = 'uploads'
+/**
+ * Where the file-backed state lives.
+ *
+ * Relative to the working directory locally, but in a container the app root
+ * is replaced on every deploy — so production points DATA_DIR at a mounted
+ * volume and these four survive a redeploy.
+ */
+const DATA_DIR = process.env.DATA_DIR ?? '.'
+const STORE = join(DATA_DIR, 'products.json')
+const ORDERS = join(DATA_DIR, 'orders.json')
+const STORES = join(DATA_DIR, 'stores.json')
+const UPLOADS = join(DATA_DIR, 'uploads')
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 const PHOTO_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -83,6 +95,25 @@ export async function restoreOrdersFromDisk(): Promise<void> {
 
 export async function persistOrders(): Promise<void> {
   await writeFile(ORDERS, JSON.stringify(allOrders(), null, 2))
+}
+
+/**
+ * Stores, their API keys and every shelf fed through the SDK.
+ *
+ * Kept in its own file rather than products.json: that one is keyed by owner
+ * and written by the Store page, while this is keyed by store and written by
+ * the SDK. Merging them would make each write race the other.
+ */
+export async function restoreStoresFromDisk(): Promise<void> {
+  try {
+    restoreStores(JSON.parse(await readFile(STORES, 'utf8')) as StoreSnapshot)
+  } catch {
+    // No file yet on a first run.
+  }
+}
+
+export async function persistStores(): Promise<void> {
+  await writeFile(STORES, JSON.stringify(snapshotStores(), null, 2))
 }
 
 /**

@@ -35,6 +35,9 @@ dev-dist
 # Store owner catalogue (file-backed).
 products.json
 
+# Stores, their API keys and SDK-fed shelves. Contains secrets.
+stores.json
+
 # Capacitor copies the web build in here on every sync; android/.gitignore
 # covers the rest of the native build output.
 android/app/src/main/assets/public

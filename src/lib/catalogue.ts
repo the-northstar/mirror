@@ -555,3 +555,33 @@ export function restoreOrders(rows: Order[]): void {
 
 /** Every order across every store, for persistence. */
 export const allOrders = (): Order[] => [...orders.values()].flat()
+
+/* -- Store persistence -------------------------------------------------- */
+
+export interface StoreSnapshot {
+  stores: Store[]
+  products: Record<string, Product[]>
+}
+
+/**
+ * Everything a restart would otherwise lose: the stores, their keys and the
+ * shelves fed through the SDK. The owner shelf is excluded because
+ * products.json already owns it and restoring both would double every row.
+ */
+export function snapshotStores(): StoreSnapshot {
+  const products: Record<string, Product[]> = {}
+  for (const [id, rows] of storeProducts) {
+    if (id !== OWNER_SHELF && rows.length) products[id] = rows
+  }
+  return { stores: [...stores.values()], products }
+}
+
+export function restoreStores(snap: StoreSnapshot): void {
+  for (const s of snap.stores ?? []) stores.set(s.id, s)
+  for (const [id, rows] of Object.entries(snap.products ?? {})) {
+    // A store that only ever received products still needs to exist, or
+    // addProducts rejects the next push as an unknown store.
+    if (!stores.get(id)) ensureStore(id)
+    storeProducts.set(id, rows)
+  }
+}

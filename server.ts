@@ -66,6 +66,8 @@ import productsRoute, {
   ownedProducts,
   persistOrders,
   restoreOrdersFromDisk,
+  restoreStoresFromDisk,
+  persistStores,
   storeFromOwnerKey,
 } from './api/products'
 
@@ -645,7 +647,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     if (!contactEmail?.includes('@')) {
       return json({ error: 'A contact email is required for orders.' }, 400)
     }
-    return json({ store: createStore({ name: name.trim(), contactEmail }) })
+    const store = createStore({ name: name.trim(), contactEmail })
+    await persistStores()
+    return json({ store })
   },
 
   'GET /api/stores': async () => json({ stores: listStores() }),
@@ -661,7 +665,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       return json({ error: 'No products supplied.' }, 400)
     }
     try {
-      return json(addProducts(storeId, products as never))
+      const result = addProducts(storeId, products as never)
+      await persistStores()
+      return json(result)
     } catch {
       return json({ error: 'Unknown store.' }, 404)
     }
@@ -686,10 +692,11 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     if (!Array.isArray(products) || products.length === 0) {
       return json({ error: 'No products supplied.' }, 400)
     }
-    // A re-push of a full catalogue should not double it.
+    // `replace` swaps the catalogue wholesale; without it rows are merged by
+    // id, so a repeated push updates instead of duplicating.
     if (replace) replaceStoreProducts(store.id, [])
     const result = addProducts(store.id, products as never)
-    await persistOrders().catch(() => {})
+    await persistStores()
     return json(result)
   },
 
@@ -710,6 +717,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       replaceStoreProducts(store.id, [])
       const result = addProducts(store.id, rows as never)
       setStoreFeed(store.id, url, kind ?? detectKind(url))
+      await persistStores()
       return json({ ...result, url })
     } catch (err) {
       return json({ error: `Could not read that feed: ${(err as Error).message}` }, 400)
@@ -821,7 +829,9 @@ Bun.serve({
       if (!/^[\w.-]+$/.test(name) || name.includes('..')) {
         return new Response('Not found', { status: 404 })
       }
-      const f = Bun.file(join('uploads', name))
+      // Same root the writer uses: in production that is the mounted volume,
+      // not the app directory a deploy replaces.
+      const f = Bun.file(join(process.env.DATA_DIR ?? '.', 'uploads', name))
       return (await f.exists()) ? new Response(f) : new Response('Not found', { status: 404 })
     }
 
@@ -849,6 +859,7 @@ Bun.serve({
 // until something else happens to read the store first.
 await ownedProducts().catch(() => [])
 await restoreOrdersFromDisk()
+await restoreStoresFromDisk()
 
 console.log(
   `  stylist layer: ${process.env.GEMINI_API_KEY ? 'on' : 'off (set GEMINI_API_KEY to enable)'}`,
