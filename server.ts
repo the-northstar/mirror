@@ -53,11 +53,14 @@ import {
 } from './src/lib/catalogue'
 import { detectKind, fetchFeed, type FeedKind } from './src/lib/feed'
 import {
-  rankByPalette,
+  rankBlush,
+  rankClothes,
   rankFoundation,
+  rankLipstick,
   rankSkincare,
   JUDGE_SLICE,
   type Ranked,
+  type Shopper,
 } from './src/lib/rank'
 import { localFor } from './src/lib/localCatalogue'
 import { judge } from './src/lib/judge'
@@ -562,13 +565,18 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       )
       .catch(() => [])
 
+    // One reading, read by every aisle. Each ranker takes the same object so a
+    // new signal reaches all of them rather than whichever call site was last
+    // edited.
+    const shopper: Shopper = { skinHex, lipHex, palette, concerns }
+
     const shortlists: Record<string, Ranked[]> = {
       hair,
       look: looks,
       foundation: rankFoundation(withStore('foundation', foundations), skinHex),
-      lipstick: rankByPalette(withStore('lipstick', lipsticks), palette),
-      blush: rankByPalette(withStore('blush', blushes), palette),
-      clothes: rankByPalette(withStore('clothes', clothes), palette),
+      lipstick: rankLipstick(withStore('lipstick', lipsticks), shopper),
+      blush: rankBlush(withStore('blush', blushes), shopper),
+      clothes: rankClothes(withStore('clothes', clothes), shopper),
       skincare: rankSkincare(withStore('skincare', skincare), concerns),
     }
 

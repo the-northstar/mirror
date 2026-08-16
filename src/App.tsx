@@ -222,10 +222,10 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           skinHex: reading.color.skin_color,
+          // Read by the lipstick ranker, which scores a shade by how far it
+          // moves her actual mouth. It used to be sent only to paint the
+          // try-on preview.
           lipHex: reading.color.lip_color,
-          // Blush leads the palette rather than the face: a blush the colour
-          // of her skin would disappear.
-          blushHex: reading.palette.swatches[0]?.hex,
           concerns: reading.concerns,
           faceShape: reading.face?.faceshape,
           gender: reading.face?.agegender?.gender,

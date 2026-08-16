@@ -113,7 +113,6 @@ export function createMirror(config: MirrorConfig = {}) {
         body: JSON.stringify({
           skinHex: reading.color.skin_color,
           lipHex: reading.color.lip_color,
-          blushHex: reading.palette.swatches[0]?.hex,
           concerns: reading.concerns,
           faceShape: (reading.face as { faceshape?: string } | null)?.faceshape,
           gender: (reading.face as { agegender?: { gender?: string } } | null)?.agegender?.gender,

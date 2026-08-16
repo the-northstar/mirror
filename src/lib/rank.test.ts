@@ -1,8 +1,16 @@
 import { expect, test, describe } from 'bun:test'
 import { deltaE, hexToLab, labToRgb, rgbToHex } from './color'
-import { rankFoundation, rankByPalette, rankSkincare, SHORTLIST } from './rank'
+import {
+  rankBlush,
+  rankClothes,
+  rankFoundation,
+  rankLipstick,
+  rankSkincare,
+  SHORTLIST,
+  type Shopper,
+} from './rank'
 import { paletteFor, type ConcernRow } from './prescription'
-import { SNAPSHOT, namedColorHex, type Product } from './catalogue'
+import { SNAPSHOT, namedColorHex, type Aisle, type Product } from './catalogue'
 
 /** A stand-in catalogue shaped like makeup-api: many shades, uneven per brand. */
 function shades(): Product[] {
@@ -68,16 +76,185 @@ describe('foundation ranking', () => {
   })
 })
 
-describe('palette ranking', () => {
-  test('ranks toward the palette, not toward her skin', () => {
-    const palette = paletteFor('#bd987d')
-    const items: Product[] = [
-      { id: 'skin-ish', aisle: 'blush', brand: 'X', name: 'Skin tone', hex: '#bd987d', colorName: 'tan' },
-      { id: 'palette-ish', aisle: 'blush', brand: 'X', name: 'Palette', hex: palette.swatches[0].hex, colorName: 'x' },
-    ]
-    const out = rankByPalette(items, palette)
-    // A blush the colour of her face is no blush.
-    expect(out[0].id).toBe('palette-ish')
+/* -- Clothes, lipstick, blush -------------------------------------------- */
+
+/** One product per hex, each its own brand so the spread pass cannot reorder. */
+function swatchShelf(aisle: Aisle, hexes: Record<string, string>): Product[] {
+  return Object.entries(hexes).map(([id, hex]) => ({
+    id, aisle, brand: id, name: id, hex, colorName: id,
+  }))
+}
+
+const shopperFor = (skinHex: string, over: Partial<Shopper> = {}): Shopper => ({
+  skinHex,
+  palette: paletteFor(skinHex),
+  concerns: [],
+  ...over,
+})
+
+describe('clothes ranking', () => {
+  const skin = '#bd987d' // mid, warm
+
+  test('a neutral is never scored as a clash', () => {
+    // The bug this replaces: white and grey carry no undertone, but were
+    // scored as distance to the nearest of four coloured wardrobe swatches,
+    // so a white shirt lost to anything vaguely seasonal.
+    const out = rankClothes(
+      swatchShelf('clothes', { white: '#f2f3f5', clash: '#1f4d38' }),
+      shopperFor('#3a2a20'), // Deep Autumn: no neutral in its four swatches
+    )
+    expect(out[0].id).toBe('white')
+    expect(out.find((p) => p.id === 'white')!.reason).toContain('neutral')
+  })
+
+  test('a garment at her own lightness is marked down', () => {
+    // Same hue family, same undertone: only the wash-out separates them, and
+    // a straight ΔE against a swatch cannot express it.
+    const out = rankClothes(
+      swatchShelf('clothes', { washedOut: '#bd987d', separated: '#6b4a2f' }),
+      shopperFor(skin),
+    )
+    expect(out[0].id).toBe('separated')
+    expect(out.find((p) => p.id === 'washedOut')!.reason).toContain('washed-out')
+  })
+
+  test('measured redness demotes red and promotes its complement', () => {
+    const flushed = shopperFor(skin, {
+      concerns: [{ type: 'redness', ui_score: 30, raw_score: 25 }],
+    })
+    const shelf = swatchShelf('clothes', { scarlet: '#c8322d', petrol: '#2f5d62' })
+    const out = rankClothes(shelf, flushed)
+    expect(out[0].id).toBe('petrol')
+    expect(out.find((p) => p.id === 'scarlet')!.reason).toContain('redness')
+
+    // And with no redness measured, the shelf is not silently restricted:
+    // the app must never act on a reading it did not take.
+    const calm = rankClothes(shelf, shopperFor(skin))
+    expect(calm.find((p) => p.id === 'scarlet')!.reason).not.toContain('redness')
+  })
+})
+
+describe('lipstick ranking', () => {
+  const shopper = shopperFor('#e0b68f', { lipHex: '#a9585a' })
+
+  test('a colour no face wears as lipstick loses to one it does', () => {
+    // The headline bug: Olive is a swatch in the Warm Spring palette, so an
+    // olive lipstick used to rank above a brick red for a warm shopper.
+    const out = rankLipstick(
+      swatchShelf('lipstick', { olive: '#6b6b3a', brick: '#a33b2a' }),
+      shopper,
+    )
+    expect(out[0].id).toBe('brick')
+    expect(out.find((p) => p.id === 'olive')!.reason).toContain('read as lipstick')
+  })
+
+  test('a shade the colour of her own lips is marked down', () => {
+    const out = rankLipstick(
+      swatchShelf('lipstick', { invisible: '#a9585a', shifts: '#8c2f3f' }),
+      shopper,
+    )
+    expect(out[0].id).toBe('shifts')
+    expect(out.find((p) => p.id === 'invisible')!.reason).toContain('barely show')
+  })
+
+  test('neutral colouring is never told a shade leans wrong', () => {
+    // It takes both sides of the arc by definition, so the lean is scored
+    // finely enough to order the shelf and never reported as a finding.
+    const neutral = shopperFor('#bd987d', { lipHex: '#a9585a' })
+    expect(neutral.palette.undertone).toBe('neutral')
+    const out = rankLipstick(
+      swatchShelf('lipstick', { coral: '#e0705f', berry: '#7d2b45', brick: '#a33b2a' }),
+      neutral,
+    )
+    for (const p of out) expect(p.reason).not.toContain('leans away')
+    // Still ordered, though: a faint gradient is what stops the tie.
+    expect(new Set(out.map((p) => p.score.toFixed(3))).size).toBe(3)
+  })
+
+  test('an unmeasured lip colour is not invented', () => {
+    // No lipHex means the payoff term is skipped, not defaulted — the reason
+    // must not claim a shift from a reading that was never taken.
+    const out = rankLipstick(
+      swatchShelf('lipstick', { brick: '#a33b2a' }),
+      shopperFor('#e0b68f'),
+    )
+    expect(out[0].reason).not.toContain('ΔE')
+  })
+})
+
+describe('a shelf is ordered, not merely filtered', () => {
+  // The failure a penalty-only ranker walks into: everything acceptable scores
+  // zero, so the top of the shelf is whichever feed answered first. Measured
+  // live, 485 of 500 lipsticks tied — barely better than no ranking at all.
+  const spreadOf = (list: Array<{ score: number }>) =>
+    new Set(list.map((p) => p.score.toFixed(2))).size
+
+  test('acceptable lipsticks are still ranked against each other', () => {
+    const shelf = swatchShelf('lipstick', {
+      coral: '#e0705f', brick: '#a33b2a', berry: '#7d2b45',
+      rose: '#c96a72', nude: '#b98a7a', plum: '#5b2c4e',
+    })
+    const out = rankLipstick(shelf, shopperFor('#e0b68f', { lipHex: '#a9585a' }))
+    expect(spreadOf(out)).toBe(shelf.length)
+  })
+
+  test('acceptable blushes are still ranked against each other', () => {
+    const shelf = swatchShelf('blush', {
+      peach: '#e8a58c', rose: '#c9697a', coral: '#e0705f',
+      berry: '#a34a63', pink: '#dda0ad',
+    })
+    const out = rankBlush(shelf, shopperFor('#bd987d'))
+    expect(spreadOf(out)).toBe(shelf.length)
+  })
+
+  test('one colour cannot open a shelf three times', () => {
+    // Live feeds carry the same measured blue as a suit, a sport coat and a
+    // dinner plate. Three rows of one colour is one recommendation printed
+    // three times, so the extras are pushed down rather than shown up top.
+    const same = Array.from({ length: 5 }, (_, i) => ({
+      id: `same-${i}`, aisle: 'clothes' as Aisle, brand: `Brand${i}`,
+      name: 'Blue thing', hex: '#2f5d8f', colorName: 'blue',
+    }))
+    const out = rankClothes(
+      [...same, { id: 'other', aisle: 'clothes', brand: 'Z', name: 'Teal', hex: '#2f5d62', colorName: 'teal' }],
+      shopperFor('#bd987d'),
+    )
+    // Everything still appears — it is reordered, never truncated.
+    expect(out.length).toBe(6)
+    expect(out.slice(0, 3).filter((p) => p.hex === '#2f5d8f').length).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('blush ranking', () => {
+  const skin = '#bd987d'
+
+  test('a blush the colour of her face is no blush', () => {
+    const out = rankBlush(
+      swatchShelf('blush', { skinToned: skin, flush: '#c9697a' }),
+      shopperFor(skin),
+    )
+    expect(out[0].id).toBe('flush')
+    expect(out.find((p) => p.id === 'skinToned')!.reason).toContain('disappear')
+  })
+
+  test('bounded from the other side too', () => {
+    // The old scorer could only express "too close". A blush far from her skin
+    // sits ON the face rather than in it, and that is also a failure.
+    const out = rankBlush(
+      swatchShelf('blush', { stripe: '#ff1744', flush: '#c9697a' }),
+      shopperFor(skin),
+    )
+    expect(out[0].id).toBe('flush')
+    expect(out.find((p) => p.id === 'stripe')!.reason).toContain('sits on the face')
+  })
+
+  test('a wardrobe colour is not a flush', () => {
+    const out = rankBlush(
+      swatchShelf('blush', { forest: '#1f4d38', flush: '#c9697a' }),
+      shopperFor(skin),
+    )
+    expect(out[0].id).toBe('flush')
+    expect(out.find((p) => p.id === 'forest')!.reason).toContain('read as a flush')
   })
 })
 
