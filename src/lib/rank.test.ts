@@ -1,9 +1,11 @@
 import { expect, test, describe } from 'bun:test'
 import { deltaE, hexToLab, labToRgb, rgbToHex } from './color'
 import {
+  faceRuleFor,
   rankBlush,
   rankClothes,
   rankFoundation,
+  rankHair,
   rankLipstick,
   rankSkincare,
   SHORTLIST,
@@ -68,6 +70,21 @@ describe('foundation ranking', () => {
     const out = rankFoundation(shades(), deepSkin)
     expect(out[0].score).toBeLessThanOrEqual(out[out.length - 1].score)
     expect(out[0].reason).toContain('ΔE')
+  })
+
+  test('the message grades the distance instead of repeating itself', () => {
+    // One sentence for every distance is not a reading: the old wording was
+    // printed identically at 4.5 ΔE and 22.1 ΔE, and only one of those is a
+    // shade she can wear.
+    const shelf: Product[] = [
+      { id: 'exact', aisle: 'foundation', brand: 'A', name: 'Exact', hex: deepSkin, colorName: 'brown' },
+      { id: 'far', aisle: 'foundation', brand: 'B', name: 'Far', hex: '#f0e8e0', colorName: 'pale' },
+    ]
+    const out = rankFoundation(shelf, deepSkin)
+    expect(out.find((p) => p.id === 'exact')!.reason).toContain('closer than the eye separates')
+    expect(out.find((p) => p.id === 'far')!.reason).toContain('different colour on your face')
+    // And it names the colour it was matched against, not just the gap.
+    expect(out[0].reason).toContain(deepSkin)
   })
 
   test('a short catalogue still fills what it can', () => {
@@ -258,6 +275,59 @@ describe('blush ranking', () => {
   })
 })
 
+describe('hair ranking against the measured face shape', () => {
+  const styles = (titles: string[]) =>
+    titles.map((name) => ({
+      id: name, aisle: 'hair' as Aisle, brand: 'Female', name,
+      hex: '#e8e4dd', colorName: 'neutral', score: 0, reason: '',
+    }))
+
+  test('a round reading prefers length over a chin-length bob', () => {
+    // Face shape was measured, displayed and sent, then dropped: this aisle
+    // scored every style 0 and showed them in catalogue order.
+    const out = rankHair(styles(['Blunt Bob', 'Long Layers']), 'round')
+    expect(out[0].name).toBe('Long Layers')
+    expect(out[0].reason).toContain('round face')
+  })
+
+  test('a square reading prefers waves over blunt straight', () => {
+    const out = rankHair(styles(['Sleek Straight', 'S-Wave Brunette']), 'square')
+    expect(out[0].name).toBe('S-Wave Brunette')
+  })
+
+  test('an oblong reading prefers a fringe over more length', () => {
+    const out = rankHair(styles(['Long Braids', 'Textured Comma']), 'oblong')
+    expect(out[0].name).toBe('Textured Comma')
+  })
+
+  test('YouCam’s wording is normalised', () => {
+    // 'Long' and 'Rectangle' are the same shape under different names.
+    expect(faceRuleFor('Long')?.key).toBe('oblong')
+    expect(faceRuleFor('  HEART ')?.key).toBe('heart')
+    expect(faceRuleFor('inverted_triangle')?.key).toBe('heart')
+  })
+
+  test('an oval reading claims no correction it did not make', () => {
+    // Oval carries everything, so inventing a preference to sound calculated
+    // would be the exact failure the reasons exist to avoid.
+    const out = rankHair(styles(['Blunt Bob', 'Long Layers']), 'oval')
+    expect(new Set(out.map((s) => s.score))).toEqual(new Set([0]))
+    for (const s of out) expect(s.reason).toContain('without needing correction')
+  })
+
+  test('no face shape means no claim, and it says so', () => {
+    const out = rankHair(styles(['Blunt Bob', 'Long Layers']), undefined)
+    for (const s of out) expect(s.reason).toContain('did not return a face shape')
+    expect(faceRuleFor('Trapezoid')).toBeNull()
+  })
+
+  test('an unrecognised shape is not guessed at', () => {
+    const out = rankHair(styles(['Blunt Bob']), 'Trapezoid')
+    expect(out[0].score).toBe(0)
+    expect(out[0].reason).toContain('did not return a face shape')
+  })
+})
+
 describe('skincare ranking', () => {
   const concerns: ConcernRow[] = [
     { type: 'oiliness', ui_score: 20, raw_score: 18 }, // severe
@@ -268,6 +338,14 @@ describe('skincare ranking', () => {
     const out = rankSkincare(SNAPSHOT.skincare, concerns)
     expect(out[0].tags).toContain('oiliness')
     expect(out[0].reason).toContain('oiliness')
+  })
+
+  test('it says how pronounced, not just what', () => {
+    // "Targets redness" reads the same whether hers measured 4% or 82%, and
+    // only one of those is a reason to buy anything.
+    const out = rankSkincare(SNAPSHOT.skincare, concerns)
+    expect(out[0].reason).toContain('82%') // oiliness: raw 18 -> severity 82
+    expect(out[0].reason).toContain('your scan read')
   })
 
   test('never claims to treat something unmeasured', () => {

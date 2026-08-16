@@ -56,13 +56,20 @@ import {
   rankBlush,
   rankClothes,
   rankFoundation,
+  rankHair,
   rankLipstick,
   rankSkincare,
   JUDGE_SLICE,
   type Ranked,
   type Shopper,
 } from './src/lib/rank'
-import { gatedAisles, shoppingFor, suitsAudience } from './src/lib/audience'
+import {
+  audienceOfCategory,
+  gatedAisles,
+  groupByAudience,
+  shoppingFor,
+  suitsAudience,
+} from './src/lib/audience'
 import { localFor } from './src/lib/localCatalogue'
 import { judge, topMatches } from './src/lib/judge'
 import { effectsFor, explainEffects, concealerFrom } from './src/lib/makeup'
@@ -536,8 +543,15 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       ).filter((p) => suitsAudience(p, shopFor))
 
     // Hair templates are YouCam's own catalogue, shaped as products so the
-    // aisle behaves like the others. Ordered by the detected gender when we
-    // have one, never filtered by it.
+    // aisle behaves like the others.
+    //
+    // Their audience needs no inferring: YouCam files every style under a
+    // literal "Male" or "Female" category, so this aisle is labelled as exactly
+    // as the clothes feeds are and takes the same filter. A cut is the one
+    // recommendation a shopper wears on their head in every photo for two
+    // months, so a shelf that interleaves the two is the worst place to make
+    // them scroll past styles they did not come for.
+    //
     // The whole catalogue, not the first page: one page is 20 styles split by
     // category, which left the aisle showing a handful.
     const hair = await allTemplates(hairTemplates)
@@ -548,11 +562,14 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
             aisle: 'hair' as never,
             brand: h.category_name,
             name: h.title,
+            audience: audienceOfCategory(h.category_name),
             hex: '#e8e4dd',
             colorName: 'neutral',
             image: h.thumb,
+            // Both replaced by rankHair below, which is the only thing that
+            // knows the measured face shape.
             score: 0,
-            reason: `A ${h.category_name.toLowerCase()} cut from YouCam's own style catalogue.`,
+            reason: '',
           }),
         ),
       )
@@ -582,7 +599,15 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     const shopper: Shopper = { skinHex, lipHex, palette, concerns }
 
     const shortlists: Record<string, Ranked[]> = {
-      hair,
+      // Ranked against the measured face shape, THEN grouped: the grouping
+      // sort is stable, so the face-shape order survives inside each block.
+      // Filtered on a declared answer like every other aisle; on 'everything'
+      // nothing is dropped, but the two sets are still kept in blocks rather
+      // than shuffled together, led by whichever side the scan read.
+      hair: groupByAudience(
+        rankHair(hair.filter((h) => suitsAudience(h, shopFor)), faceShape),
+        gender,
+      ),
       look: looks,
       foundation: rankFoundation(withStore('foundation', foundations), skinHex),
       lipstick: rankLipstick(withStore('lipstick', lipsticks), shopper),
@@ -612,6 +637,19 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
         season: palette.season,
         finish: formula.finish,
         because: formula.because,
+        skinHex,
+        depth: palette.depth,
+        lipHex,
+        faceShape,
+        // Most pronounced first, and only what was actually measured: an
+        // absent concern must not reach the model as a zero it can write a
+        // sentence about.
+        concerns: [...concerns]
+          .filter((c) => typeof c.raw_score === 'number')
+          .map((c) => ({ type: c.type, severity: Math.round(100 - c.raw_score) }))
+          .sort((a, b) => b.severity - a.severity)
+          .slice(0, 6)
+          .map((c) => `${c.type.replace(/_v2$/, '').replace(/_/g, ' ')} ${c.severity}%`),
       },
       req.signal,
     )

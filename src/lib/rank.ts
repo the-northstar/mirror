@@ -74,11 +74,25 @@ export function rankFoundation(products: Product[], skinHex: string): Ranked[] {
 
   return filled.slice(0, SHORTLIST).map((p) => ({
     ...p,
-    reason:
-      p.score < 3
-        ? `Within ${p.score.toFixed(1)} ΔE of your measured skin colour, which is a close match.`
-        : `Nearest available shade to your measured skin colour (${p.score.toFixed(1)} ΔE).`,
+    reason: whyFoundation(p.score, skinHex),
   }))
+}
+
+/**
+ * Graded, because one sentence for every distance is not a reading.
+ *
+ * "Nearest available shade to your measured skin colour" was printed identically
+ * at 4.5 ΔE and at 22.1 ΔE — the first is a wearable match and the second is
+ * visibly the wrong colour, and a shopper scrolling the shelf could not tell
+ * them apart. Roughly: under 2 is invisible to the eye, under 5 is a match in
+ * most light, and past about 10 it is a different colour on the face.
+ */
+function whyFoundation(dE: number, skinHex: string): string {
+  const d = dE.toFixed(1)
+  if (dE < 2) return `Within ${d} ΔE of your measured skin colour (${skinHex}) — closer than the eye separates.`
+  if (dE < 5) return `${d} ΔE from your measured skin colour (${skinHex}), which is a match in most light.`
+  if (dE < 10) return `${d} ΔE from your measured skin colour (${skinHex}) — wearable, but the shades above match you closer.`
+  return `${d} ΔE from your measured skin colour (${skinHex}), which will read as a different colour on your face.`
 }
 
 function pickDistinct(
@@ -442,6 +456,149 @@ export function rankBlush(products: Product[], shopper: Shopper): Ranked[] {
   return spread(scored)
 }
 
+/* -- Hair ----------------------------------------------------------------- */
+
+/**
+ * Traits readable from a style's title.
+ *
+ * YouCam's hair catalogue gives a title, a thumbnail and a category — no
+ * structured attributes — so the title is the only thing there is to read. A
+ * style whose title says nothing recognisable matches no trait and is ranked
+ * neutrally, rather than being assigned one by guesswork.
+ */
+const HAIR_TRAITS: Record<string, RegExp> = {
+  curl: /\b(curl|curls|curly|wave|waves|wavy|s-wave|perm|coil|afro|shag)\b/i,
+  blunt: /\b(blunt|sleek|straight|slick|slicked)\b/i,
+  fringe: /\b(fringe|bangs|comma)\b/i,
+  sidePart: /\b(side|side-swept|combover|comma)\b/i,
+  middlePart: /\b(middle|centre|center)\b/i,
+  bob: /\b(bob|lob)\b/i,
+  crop: /\b(crop|pixie|buzz|fade|taper|short)\b/i,
+  length: /\b(long|braid|braids|bun|ponytail|updo)\b/i,
+  volume: /\b(volume|voluminous|messy|textured|layered|layers)\b/i,
+}
+
+const traitsOf = (title: string): string[] =>
+  Object.entries(HAIR_TRAITS).filter(([, re]) => re.test(title)).map(([t]) => t)
+
+/**
+ * What each measured face shape is looking for from a cut.
+ *
+ * This is styling convention rather than measurement — the same standing as the
+ * simultaneous-contrast reasoning the clothes ranker uses. The MEASUREMENT is
+ * the face shape YouCam returned; the convention is what to do about it. Both
+ * halves go in the reason, so a shopper can see which is which rather than
+ * being told a haircut was calculated.
+ */
+interface FaceRule {
+  wants: string[]
+  avoids: string[]
+  /** Completes "…, which <needs>." */
+  needs: string
+}
+
+const FACE_RULES: Record<string, FaceRule> = {
+  round: {
+    wants: ['length', 'volume', 'sidePart', 'middlePart'],
+    avoids: ['bob', 'crop'],
+    needs: 'suits length and height rather than width at the cheeks',
+  },
+  square: {
+    wants: ['curl', 'volume', 'sidePart', 'length'],
+    avoids: ['blunt'],
+    needs: 'is softened by waves and side-swept shapes rather than hard straight lines',
+  },
+  oblong: {
+    wants: ['fringe', 'bob', 'curl'],
+    avoids: ['length', 'blunt'],
+    needs: 'gains from width and a fringe rather than more length',
+  },
+  heart: {
+    wants: ['bob', 'curl', 'sidePart'],
+    avoids: ['volume'],
+    needs: 'balances a narrower chin with fullness lower down',
+  },
+  diamond: {
+    wants: ['fringe', 'bob', 'curl'],
+    avoids: ['blunt'],
+    needs: 'is softened across the cheekbones by a fringe or a chin-length shape',
+  },
+  triangle: {
+    wants: ['volume', 'crop', 'fringe'],
+    avoids: ['length'],
+    needs: 'gains from fullness higher up',
+  },
+  // Oval carries every shape, so it gets no wants and no avoids — and the
+  // reason says exactly that rather than inventing a preference to sound
+  // more calculated than the reading was.
+  oval: { wants: [], avoids: [], needs: 'carries most shapes without needing correction' },
+}
+
+/** YouCam's own wording varies; anything unrecognised ranks neutrally. */
+export function faceRuleFor(faceShape?: string): { key: string; rule: FaceRule } | null {
+  const s = faceShape?.trim().toLowerCase().replace(/[\s_-]+/g, '')
+  if (!s) return null
+  const alias: Record<string, string> = {
+    long: 'oblong', rectangle: 'oblong', rectangular: 'oblong', oblong: 'oblong',
+    round: 'round', circle: 'round',
+    square: 'square',
+    heart: 'heart', inverted: 'heart', invertedtriangle: 'heart',
+    diamond: 'diamond',
+    triangle: 'triangle', pear: 'triangle',
+    oval: 'oval',
+  }
+  const key = alias[s]
+  return key ? { key, rule: FACE_RULES[key] } : null
+}
+
+/**
+ * Hair: ranked against the measured face shape.
+ *
+ * The aisle previously scored every style 0 and showed them in catalogue
+ * order, while the scan measured a face shape, displayed it on the diagnosis
+ * screen, sent it to this route and then dropped it. A haircut is the one
+ * recommendation where face shape is the reading that matters, so this is
+ * where it earns its place.
+ */
+export function rankHair<T extends Ranked>(styles: T[], faceShape?: string): T[] {
+  const found = faceRuleFor(faceShape)
+  if (!found) {
+    // No reading, so no claim. The styles are still offered, and the wording
+    // says why they are not ranked instead of implying they were.
+    return styles.map((s) => ({
+      ...s,
+      score: 0,
+      reason: `A ${s.brand.toLowerCase()} cut from YouCam's catalogue. Your scan did not return a face shape, so these are not ranked to one.`,
+    }))
+  }
+
+  const { key, rule } = found
+  const scored = styles.map((s) => {
+    const traits = traitsOf(s.name)
+    const wants = traits.filter((t) => rule.wants.includes(t))
+    const avoids = traits.filter((t) => rule.avoids.includes(t))
+    return {
+      ...s,
+      score: avoids.length * 6 - wants.length * 4,
+      reason: wants.length
+        ? `Your scan read a ${key} face, which ${rule.needs} — and this is a ${describe(wants)} shape.`
+        : avoids.length
+          ? `Your scan read a ${key} face, which ${rule.needs}. This ${describe(avoids)} shape works against that.`
+          : `Your scan read a ${key} face, which ${rule.needs}. Nothing in this style pulls either way.`,
+    }
+  })
+  return scored.sort((a, b) => a.score - b.score)
+}
+
+const TRAIT_WORD: Record<string, string> = {
+  curl: 'waved or curled', blunt: 'blunt, straight', fringe: 'fringed',
+  sidePart: 'side-parted', middlePart: 'centre-parted', bob: 'chin-length',
+  crop: 'cropped', length: 'long', volume: 'full, layered',
+}
+
+const describe = (traits: string[]): string =>
+  traits.map((t) => TRAIT_WORD[t] ?? t).join(' and ')
+
 /* -- Skincare ------------------------------------------------------------- */
 
 /** Skincare: aim at the worst measured problem. */
@@ -450,20 +607,24 @@ export function rankSkincare(products: Product[], concerns: ConcernRow[]): Ranke
     .map((p) => {
       const treats = p.tags ?? []
       let total = 0
-      const hit: string[] = []
+      const hit: Array<{ label: string; sev: number }> = []
       for (const t of treats) {
         const sev = severityOf(concerns, t)
         if (sev !== null && sev > 0.05) {
           total += sev
-          hit.push(t.replace(/_v2$/, '').replace(/_/g, ' '))
+          hit.push({ label: t.replace(/_v2$/, '').replace(/_/g, ' '), sev })
         }
       }
+      // Worst first, and the severity is printed: "targets redness" reads the
+      // same whether her redness measured 8% or 61%, and only one of those is
+      // a reason to buy anything.
+      hit.sort((a, b) => b.sev - a.sev)
       return {
         ...p,
         // Negated so the shared "lower is better" convention holds.
         score: -total,
         reason: hit.length
-          ? `Targets ${hit.join(' and ')}, which your scan flagged.`
+          ? `Targets ${hit.map((h) => `${h.label} (your scan read ${pct(h.sev)})`).join(' and ')}.`
           : 'A general-purpose step, not aimed at anything your scan flagged.',
       }
     })

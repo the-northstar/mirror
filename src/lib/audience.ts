@@ -50,6 +50,45 @@ export function suitsAudience(p: { audience?: string }, wants: ShoppingFor): boo
 }
 
 /**
+ * YouCam's own hair categories are literally "Male" and "Female".
+ *
+ * So this reads a label rather than inferring one, which is why hair can be
+ * filtered as confidently as a feed's menswear path — and why anything else,
+ * including a category YouCam adds later, falls through to unisex rather than
+ * being guessed at from its name.
+ */
+export function audienceOfCategory(category?: string): 'women' | 'men' | 'unisex' {
+  const c = category?.trim().toLowerCase()
+  if (c === 'male' || c === 'men' || c === "men's") return 'men'
+  if (c === 'female' || c === 'women' || c === "women's") return 'women'
+  return 'unisex'
+}
+
+/**
+ * Keep the two sets in blocks instead of shuffling them together.
+ *
+ * Used where nothing is being filtered — a shopper who asked for 'everything'
+ * gets every style — but an interleaved shelf still makes them scroll past
+ * alternating men's and women's cuts to see either set whole. Unisex rows go
+ * last rather than in either block, because they belong to both.
+ *
+ * `lead` is the scan's guess, which is the right weight for it: deciding which
+ * block comes first is a reversible convenience, and a wrong guess costs a
+ * scroll rather than a missing aisle.
+ */
+export function groupByAudience<T extends { audience?: string }>(
+  rows: T[],
+  lead?: string,
+): T[] {
+  const first = lead?.toLowerCase() === 'male' ? 'men' : lead?.toLowerCase() === 'female' ? 'women' : null
+  if (!first) return rows
+  const rank = (r: T) => (r.audience === first ? 0 : !r.audience || r.audience === 'unisex' ? 2 : 1)
+  // Stable: within a block the catalogue's own order survives, so this
+  // regroups the shelf without silently re-ranking it.
+  return [...rows].sort((a, b) => rank(a) - rank(b))
+}
+
+/**
  * Colour cosmetics are not filtered by audience — they are folded away.
  *
  * There is no such thing as a men's lipstick row to filter on, so the choice

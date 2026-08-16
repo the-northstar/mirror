@@ -1,5 +1,11 @@
 import { expect, test, describe } from 'bun:test'
-import { gatedAisles, shoppingFor, suitsAudience } from './audience'
+import {
+  audienceOfCategory,
+  gatedAisles,
+  groupByAudience,
+  shoppingFor,
+  suitsAudience,
+} from './audience'
 
 describe('who the shelf is for', () => {
   test('the declared answer outranks the detected one', () => {
@@ -41,6 +47,61 @@ describe('filtering the shelf', () => {
   test('everything means everything', () => {
     expect(suitsAudience({ audience: 'women' }, 'everything')).toBe(true)
     expect(suitsAudience({ audience: 'men' }, 'everything')).toBe(true)
+  })
+})
+
+describe('hair categories', () => {
+  test('reads YouCam’s own label rather than inferring one', () => {
+    // The live catalogue files all 116 styles under exactly these two.
+    expect(audienceOfCategory('Male')).toBe('men')
+    expect(audienceOfCategory('Female')).toBe('women')
+  })
+
+  test('an unrecognised category is unisex, not a guess', () => {
+    expect(audienceOfCategory('Braids')).toBe('unisex')
+    expect(audienceOfCategory(undefined)).toBe('unisex')
+  })
+
+  test('a declared shelf gets only its own styles', () => {
+    const styles = [
+      { id: 'a', audience: audienceOfCategory('Male') },
+      { id: 'b', audience: audienceOfCategory('Female') },
+    ]
+    expect(styles.filter((s) => suitsAudience(s, 'men')).map((s) => s.id)).toEqual(['a'])
+    expect(styles.filter((s) => suitsAudience(s, 'women')).map((s) => s.id)).toEqual(['b'])
+  })
+})
+
+describe('grouping rather than interleaving', () => {
+  const shelf = [
+    { id: 'f1', audience: 'women' },
+    { id: 'm1', audience: 'men' },
+    { id: 'f2', audience: 'women' },
+    { id: 'u1', audience: 'unisex' },
+    { id: 'm2', audience: 'men' },
+  ]
+
+  test('the read side leads and neither set is interleaved', () => {
+    expect(groupByAudience(shelf, 'male').map((r) => r.id)).toEqual(
+      ['m1', 'm2', 'f1', 'f2', 'u1'],
+    )
+    expect(groupByAudience(shelf, 'female').map((r) => r.id)).toEqual(
+      ['f1', 'f2', 'm1', 'm2', 'u1'],
+    )
+  })
+
+  test('nothing is dropped — this only regroups', () => {
+    expect(groupByAudience(shelf, 'male')).toHaveLength(shelf.length)
+  })
+
+  test('order within a block is the catalogue’s own', () => {
+    // Stable, so regrouping cannot silently re-rank what it regroups.
+    expect(groupByAudience(shelf, 'male').slice(0, 2).map((r) => r.id)).toEqual(['m1', 'm2'])
+  })
+
+  test('with nothing read, the shelf is left exactly as it came', () => {
+    expect(groupByAudience(shelf)).toEqual(shelf)
+    expect(groupByAudience(shelf, 'unknown')).toEqual(shelf)
   })
 })
 
