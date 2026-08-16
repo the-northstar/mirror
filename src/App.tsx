@@ -39,6 +39,10 @@ interface Shop {
   palette: Reading['palette']
   formula: Reading['formula']
   shortlists: Record<string, RankedItem[]>
+  /** Who the shelf was built for, echoed back so the UI cannot drift from it. */
+  audience: ShoppingFor
+  /** Ranked and returned, but folded away until the shopper asks for them. */
+  gated: string[]
   picks: Record<
     string,
     Array<{ productId: string; reason: string; source: 'model' | 'match'; rank: number }>
@@ -58,6 +62,27 @@ interface CartLine {
   hex: string
   shadeName?: string
   price?: number
+}
+
+/* -- Who the shelf is for ----------------------------------------------- */
+
+export type ShoppingFor = 'women' | 'men' | 'everything'
+
+const AUDIENCES: Array<{ key: ShoppingFor; label: string }> = [
+  { key: 'women', label: "Women's" },
+  { key: 'men', label: "Men's" },
+  { key: 'everything', label: 'Everything' },
+]
+
+/**
+ * What the scan guessed, used only to preselect the control.
+ *
+ * The shopper's own answer is what filters the shelf. This is a starting
+ * position for it, so the common case costs no taps and a misread costs one.
+ */
+function detectedAudience(reading: Reading | null): ShoppingFor {
+  const read = String(reading?.face?.agegender?.gender ?? '').toLowerCase()
+  return read === 'female' ? 'women' : read === 'male' ? 'men' : 'everything'
 }
 
 const AISLES = [
@@ -129,6 +154,9 @@ export default function App() {
   const [cartLines, setCartLines] = useState<Record<string, CartLine>>({})
   const [scans, setScans] = useState<PastScan[]>([])
   const [shooting, setShooting] = useState(false)
+  // Null until the shopper answers for themselves, at which point their answer
+  // outranks the scan's guess for good.
+  const [audience, setAudience] = useState<ShoppingFor | null>(null)
 
   // One key per module. The prescription is deliberately NOT persisted: the
   // shelf may have changed underneath it, so it is recomputed on restore.
@@ -232,6 +260,7 @@ export default function App() {
           concerns: reading.concerns,
           faceShape: reading.face?.faceshape,
           gender: reading.face?.agegender?.gender,
+          audience: audience ?? detectedAudience(reading),
         }),
       })
       const body = await res.json().catch(() => null)
@@ -242,7 +271,17 @@ export default function App() {
     } catch (err) {
       setError((err as Error).message)
     }
-  }, [reading, shop])
+  }, [reading, shop, audience])
+
+  /**
+   * Changing who the shelf is for drops it, because both the FILTER and the
+   * ranking depend on the answer. Re-deriving it in the browser from a shelf
+   * built for someone else would show a filtered view of the wrong shop.
+   */
+  const chooseAudience = useCallback((next: ShoppingFor) => {
+    setAudience(next)
+    setShop(null)
+  }, [])
 
   const count = Object.values(cart).reduce((a, b) => a + b, 0)
 
@@ -360,7 +399,13 @@ export default function App() {
         <NoReading onStart={newScan} />
       )}
       {screen === 'diagnosis' && reading && (
-        <Diagnosis reading={reading} photo={photo} onShop={openShop} />
+        <Diagnosis
+          reading={reading}
+          photo={photo}
+          onShop={openShop}
+          audience={audience ?? detectedAudience(reading)}
+          onAudience={chooseAudience}
+        />
       )}
       {screen === 'shop' && reading && (
         <ShopView
@@ -442,10 +487,14 @@ function Diagnosis({
   reading,
   photo,
   onShop,
+  audience,
+  onAudience,
 }: {
   reading: Reading
   photo: string | null
   onShop: () => void
+  audience: ShoppingFor
+  onAudience: (next: ShoppingFor) => void
 }) {
   const ranked = [...reading.concerns]
     .map((c) => ({ ...c, severity: 100 - c.raw_score }))
@@ -530,6 +579,31 @@ function Diagnosis({
             ))}
           </div>
 
+          {/* Sits with the button rather than in a settings panel: it changes
+              what the next screen contains, so it belongs to that decision.
+              The scan preselects it, and the shopper has the last word. */}
+          <fieldset className="audience">
+            <legend className="kicker">Shopping for</legend>
+            <div className="audience-row" role="radiogroup" aria-label="Shopping for">
+              {AUDIENCES.map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={audience === a.key}
+                  className={audience === a.key ? 'pill on' : 'pill'}
+                  onClick={() => onAudience(a.key)}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+            <p className="tiny">
+              Your reading is the same either way — this only decides which
+              shelves it is applied to.
+            </p>
+          </fieldset>
+
           <button className="btn" onClick={onShop}>
             See what suits you
           </button>
@@ -609,6 +683,9 @@ function ShopView({
   // Shelves run to hundreds of rows, so they arrive a page at a time.
   const PAGE = 24
   const [shown, setShown] = useState(PAGE)
+  // Folded-away aisles, once asked for. Asking is the whole gate: they are
+  // already ranked and already here, so opening them costs no request.
+  const [showGated, setShowGated] = useState(false)
 
   if (!shop) {
     return (
@@ -623,9 +700,10 @@ function ShopView({
     )
   }
 
-  const available = AISLES.filter(
-    (a) => (shop.shortlists[a.key]?.length ?? 0) > 0,
-  )
+  const gated = shop.gated ?? []
+  const stocked = AISLES.filter((a) => (shop.shortlists[a.key]?.length ?? 0) > 0)
+  const available = stocked.filter((a) => showGated || !gated.includes(a.key))
+  const folded = stocked.filter((a) => gated.includes(a.key))
 
   // Choose what you are shopping for first; a wall of foundation is not a
   // starting point when six other aisles are ranked and waiting.
@@ -668,6 +746,14 @@ function ShopView({
             )
           })}
         </div>
+
+        {/* Not a barrier and not phrased as one: the aisles are ranked and
+            waiting, and this is the shopper saying they want them. */}
+        {folded.length > 0 && !showGated && (
+          <button className="btn btn-quiet" onClick={() => setShowGated(true)}>
+            Also show colour cosmetics ({folded.map((a) => a.label.toLowerCase()).join(', ')})
+          </button>
+        )}
       </main>
     )
   }
@@ -704,7 +790,7 @@ function ShopView({
       </section>
 
       <nav className="aisles" aria-label="Categories">
-        {AISLES.filter((a) => (shop.shortlists[a.key]?.length ?? 0) > 0).map((a) => (
+        {available.map((a) => (
           <button
             key={a.key}
             className={aisle === a.key ? 'aisle on' : 'aisle'}

@@ -52,10 +52,16 @@ export interface RankedProduct {
   reason: string
 }
 
+/** Who the shelf is for. 'everything' declines to split it. */
+export type ShoppingFor = 'women' | 'men' | 'everything'
+
 export interface Shop {
   palette: Reading['palette']
   formula: Reading['formula']
   shortlists: Record<string, RankedProduct[]>
+  audience: ShoppingFor
+  /** Ranked and returned in full, but not to be shown unasked. */
+  gated: string[]
   /** Up to six per aisle, best first. `source: 'match'` means no model answered. */
   picks: Record<
     string,
@@ -109,8 +115,15 @@ export function createMirror(config: MirrorConfig = {}) {
       return call<Reading>('/api/read', { method: 'POST', body: form })
     },
 
-    /** Rank the catalogue against a reading. */
-    async shop(reading: Reading): Promise<Shop> {
+    /**
+     * Rank the catalogue against a reading.
+     *
+     * `audience` is the shopper's own answer where the host site has one; the
+     * scan's guess is only a fallback, so a retailer that already knows which
+     * shelf its customer is browsing should pass it rather than let a face
+     * detector decide what their catalogue shows.
+     */
+    async shop(reading: Reading, audience?: ShoppingFor): Promise<Shop> {
       return call<Shop>('/api/shop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,6 +131,7 @@ export function createMirror(config: MirrorConfig = {}) {
           skinHex: reading.color.skin_color,
           lipHex: reading.color.lip_color,
           concerns: reading.concerns,
+          audience,
           faceShape: (reading.face as { faceshape?: string } | null)?.faceshape,
           gender: (reading.face as { agegender?: { gender?: string } } | null)?.agegender?.gender,
           storeId: config.storeId,

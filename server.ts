@@ -62,8 +62,9 @@ import {
   type Ranked,
   type Shopper,
 } from './src/lib/rank'
+import { gatedAisles, shoppingFor, suitsAudience } from './src/lib/audience'
 import { localFor } from './src/lib/localCatalogue'
-import { judge } from './src/lib/judge'
+import { judge, topMatches } from './src/lib/judge'
 import { effectsFor, explainEffects, concealerFrom } from './src/lib/makeup'
 import productsRoute, {
   ownedProducts,
@@ -466,13 +467,16 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
    * YouCam units.
    */
   'POST /api/shop': async (req) => {
-    const { skinHex, lipHex, concerns = [], faceShape, gender, storeId } = (await req.json()) as {
+    const {
+      skinHex, lipHex, concerns = [], faceShape, gender, audience, storeId,
+    } = (await req.json()) as {
       storeId?: string
       skinHex?: string
       lipHex?: string
       concerns?: ConcernOut[]
       faceShape?: string
       gender?: string
+      audience?: string
     }
     if (!skinHex || !/^#[0-9a-f]{6}$/i.test(skinHex)) {
       return json({ error: 'Missing skin colour from the scan.' }, 400)
@@ -513,8 +517,14 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     // The SDK is the exception: embedded on a retailer's own site, it must
     // recommend only what that retailer actually sells, so neither the public
     // feeds nor the committed CSV catalogue may leak into it.
+    // Who the shopper says they are shopping for. Detection prefills the
+    // control in the UI, but this is the shopper's own answer by the time it
+    // reaches here, which is why it may FILTER: a wrong guess we made is a
+    // different thing from a choice they made.
+    const shopFor = shoppingFor(audience, gender)
+
     const withStore = (aisle: Aisle, rows: Product[]) =>
-      storeId
+      (storeId
         ? productsForStore(storeId).filter((p) => p.aisle === aisle)
         : [
             ...rows,
@@ -523,6 +533,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
             ...localFor(aisle),
             ...productsForAisle(aisle),
           ]
+      ).filter((p) => suitsAudience(p, shopFor))
 
     // Hair templates are YouCam's own catalogue, shaped as products so the
     // aisle behaves like the others. Ordered by the detected gender when we
@@ -580,19 +591,19 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       skincare: rankSkincare(withStore('skincare', skincare), concerns),
     }
 
-    // Detected gender demotes mismatched rows rather than removing them: the
-    // read can be wrong, and hiding menswear from a misread is worse than
-    // showing it lower down.
-    const wants = gender?.toLowerCase() === 'male' ? 'men' : gender?.toLowerCase() === 'female' ? 'women' : null
-    if (wants) {
-      for (const list of Object.values(shortlists)) {
-        list.sort((a, b) => rankAudience(a, wants) - rankAudience(b, wants))
-      }
-    }
+    // Aisles the shopper has to ask for. They are still RANKED and still
+    // returned in full, so opening the section costs no second request and
+    // nothing is decided for them twice — they are just not put on the shelf
+    // unasked. Nobody is barred from an aisle; it is one tap away.
+    const gated = gatedAisles(shopFor)
 
-    // The model sees a slice; the shopper sees the whole shelf.
+    // The model sees a slice; the shopper sees the whole shelf. Gated aisles
+    // are withheld from it too, so "how these work together" cannot build a
+    // look around a lipstick the shopper never opened.
     const forJudge = Object.fromEntries(
-      Object.entries(shortlists).map(([k, v]) => [k, v.slice(0, JUDGE_SLICE)]),
+      Object.entries(shortlists)
+        .filter(([k]) => !gated.includes(k))
+        .map(([k, v]) => [k, v.slice(0, JUDGE_SLICE)]),
     )
     const verdict = await judge(
       forJudge,
@@ -615,7 +626,16 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       palette,
       formula,
       shortlists,
-      picks: verdict.picks,
+      audience: shopFor,
+      gated,
+      // A folded aisle is withheld from the model, so it comes back with no
+      // picks at all — which would leave it the one shelf a shopper opens to
+      // find nothing recommended. It gets its colour matches instead, labelled
+      // as matches: the aisle is unadvised, not unranked.
+      picks: {
+        ...topMatches(Object.fromEntries(gated.map((a) => [a, shortlists[a] ?? []]))),
+        ...verdict.picks,
+      },
       together: verdict.together,
       concealer,
       makeup: {
@@ -771,12 +791,6 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   'POST /api/products': productsRoute,
   'POST /api/products/import': productsRoute,
   'DELETE /api/products': productsRoute,
-}
-
-/** Mismatched audience sinks; unisex and unset stay neutral. */
-function rankAudience(p: { audience?: string }, wants: string): number {
-  if (!p.audience || p.audience === 'unisex') return 0
-  return p.audience === wants ? -1 : 1
 }
 
 /** YouCam fetches ref_file_url from its own servers, so it must be public. */
