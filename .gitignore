@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+# The PWA plugin regenerates these on every dev run, so a tracked copy turns
+# any `bun run dev` into a dirty tree that blocks the next pull.
+dev-dist
 
 # Secrets — the repo is submitted publicly for judging.
 .env
