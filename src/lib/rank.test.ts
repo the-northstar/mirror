@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test'
-import { deltaE, hexToLab } from './color'
+import { deltaE, hexToLab, labToRgb, rgbToHex } from './color'
 import { rankFoundation, rankByPalette, rankSkincare, rankGlasses, rankJewellery, SHORTLIST } from './rank'
 import { paletteFor, type ConcernRow } from './prescription'
 import { SNAPSHOT, namedColorHex, type Product } from './catalogue'
@@ -21,7 +21,6 @@ function shades(): Product[] {
 
 function mk(id: string, brand: string, L: number, a: number, b: number): Product {
   // Build a hex from Lab so the test data exercises the real conversion.
-  const { labToRgb, rgbToHex } = require('./color')
   const hex = rgbToHex(labToRgb({ L, a, b }))
   return { id, aisle: 'foundation', brand, name: 'Foundation', hex, colorName: 'brown' }
 }

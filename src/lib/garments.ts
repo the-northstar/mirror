@@ -1,4 +1,10 @@
-import type { GarmentCategory } from './api'
+export type GarmentCategory =
+  | 'full_body'
+  | 'upper_body'
+  | 'lower_body'
+  | 'shoes'
+  | 'outer'
+  | 'auto'
 
 export interface Garment {
   id: string

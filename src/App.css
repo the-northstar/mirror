@@ -1,15 +1,117 @@
-/* Hero ----------------------------------------------------------------- */
-.hero {
-  padding: 8px 0 4px;
+/* Layout ---------------------------------------------------------------- */
+.app {
+  min-height: 100dvh;
+  padding-bottom: 64px;
 }
 
-.hero-title {
-  font-size: clamp(38px, 12vw, 52px);
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px;
 }
 
-.hero-sub {
-  margin-top: 16px;
-  max-width: 34ch;
+.stack-lg {
+  display: grid;
+  gap: 26px;
+}
+
+/* Top bar --------------------------------------------------------------- */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  background: rgb(251 250 247 / 0.9);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  background: none;
+  border: 0;
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  padding: 4px;
+}
+
+.bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.textlink {
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.textlink:hover {
+  color: var(--ink);
+  background: var(--paper-2);
+}
+
+.cart-btn {
+  position: relative;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.pip {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Landing --------------------------------------------------------------- */
+.land {
+  display: grid;
+  gap: 32px;
+  align-items: center;
+  padding-block: 40px 24px;
+}
+
+.land-title {
+  font-size: clamp(38px, 8vw, 68px);
+}
+
+.lead {
+  margin-top: 18px;
+  font-size: 16px;
+  max-width: 46ch;
+}
+
+.land-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 26px 0 20px;
+}
+
+.land-actions .btn {
+  width: auto;
+  min-width: 176px;
 }
 
 .guides {
@@ -17,13 +119,13 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .guides li {
   font-size: 13.5px;
   color: var(--ink-2);
-  padding-left: 18px;
+  padding-left: 17px;
   position: relative;
 }
 
@@ -32,47 +134,112 @@
   position: absolute;
   left: 0;
   top: 8px;
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--accent);
-  opacity: 0.55;
 }
 
-.done-note {
+.land-aside {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.chip-row {
+  display: flex;
+  gap: 8px;
+}
+
+.tone {
+  width: 44px;
+  height: 64px;
+  border-radius: 10px;
+}
+
+/* Diagnosis ------------------------------------------------------------- */
+.diagnosis {
+  display: grid;
+  gap: 28px;
+}
+
+/* The verdict is the payoff, so it gets the full width and the photo sits
+   beside it rather than pushing it into a narrow ribbon. */
+.verdict {
+  display: grid;
+  gap: 24px;
+  align-items: start;
+}
+
+.verdict-body {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  /* Never let the copy column collapse into a ribbon of stacked words. */
+  min-width: 0;
+}
+
+.verdict-title {
+  font-size: clamp(30px, 5vw, 46px);
+  text-transform: capitalize;
+}
+
+.kicker {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--ink-2);
+  display: block;
+}
+
+.verdict-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.stat {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 7px;
+  font-size: 16px;
+  font-weight: 500;
+  margin-top: 5px;
 }
 
-.thumb {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  object-fit: cover;
-  flex: none;
+.verdict-body .btn {
+  width: auto;
+  justify-self: start;
+  min-width: 220px;
 }
 
-.working {
-  text-align: center;
-  color: var(--ink);
-  font-size: 15px;
-}
-
-.empty {
-  text-align: center;
+.detail-grid {
   display: grid;
-  gap: 12px;
-  justify-items: center;
-  padding: 36px 20px;
+  gap: 18px;
 }
 
-/* Report reveal -------------------------------------------------------- */
-.reveal {
-  position: relative;
+.aisle-note {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  max-width: 70ch;
+  line-height: 1.55;
 }
 
-.reveal-photo {
+.lead-2 {
+  margin-top: 12px;
+  color: var(--ink);
+}
+
+.split {
+  display: grid;
+  gap: 24px;
+  align-items: start;
+}
+
+.scan-photo {
   width: 100%;
   aspect-ratio: 4 / 5;
   object-fit: cover;
@@ -80,49 +247,82 @@
   display: block;
 }
 
-.reveal-meta {
-  margin-top: -46px;
-  margin-left: 16px;
-  position: relative;
-  background: var(--paper);
-  display: inline-block;
-  padding: 12px 18px 10px;
-  border-radius: 14px 14px 0 0;
+.h-lg {
+  font-size: clamp(28px, 5vw, 40px);
 }
 
-.eyebrow {
-  font-size: 11px;
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  background: var(--card);
+}
+
+.swatch i {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+}
+
+.measures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 16px;
+  margin: 16px 0 0;
+}
+
+.measures dt {
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.1em;
   color: var(--ink-2);
+  margin-bottom: 5px;
 }
 
-.reveal-title {
-  font-size: 34px;
+.measures dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cap {
   text-transform: capitalize;
 }
 
-.section-title {
-  font-size: 30px;
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  border: 1px solid rgb(22 26 23 / 0.1);
 }
 
-.subhead {
-  margin-top: 22px;
-  font-size: 15px;
-}
-
-/* Bars ----------------------------------------------------------------- */
 .bars {
   list-style: none;
   margin: 16px 0 0;
   padding: 0;
   display: grid;
-  gap: 12px;
+  gap: 11px;
 }
 
 .bars li {
   display: grid;
-  grid-template-columns: 82px 1fr 30px;
+  grid-template-columns: 96px 1fr 32px;
   align-items: center;
   gap: 12px;
   font-size: 14px;
@@ -148,189 +348,292 @@
   color: var(--ink-2);
 }
 
-.footnote {
-  margin-top: 14px;
-}
-
-/* Palette -------------------------------------------------------------- */
-.palette {
+.mask-row {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 12px;
   margin-top: 16px;
 }
 
-.chip {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
+.mask-row figure {
   margin: 0;
-}
-
-.chip-swatch {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  flex: none;
-  border: 1px solid rgb(28 26 23 / 0.08);
-}
-
-.chip figcaption {
   display: grid;
-  gap: 3px;
+  gap: 6px;
 }
 
-.avoid {
+.mask-row img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  /* The masks are transparent overlays. On a pale card they read as empty
+     boxes, so they get a dark ground to sit against. */
+  background: #23261f;
+}
+
+.accent-card {
+  border-color: var(--accent);
+  border-width: 1.5px;
+}
+
+.formula-line {
+  color: var(--ink);
+  font-size: 17px;
+  margin: 10px 0 14px;
+}
+
+.because {
+  margin: 0 0 18px;
+  padding-left: 18px;
+  display: grid;
+  gap: 7px;
+}
+
+.because li {
+  font-size: 14px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.accent-card .btn {
+  width: auto;
+  min-width: 200px;
+}
+
+/* Shop ------------------------------------------------------------------ */
+.aisles {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
 }
 
-.avoid-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 13px 7px 8px;
+.aisle {
+  flex: none;
   border: 1px solid var(--line);
+  background: var(--card);
   border-radius: 999px;
-  font-size: 13px;
+  padding: 9px 17px;
+  font-size: 14px;
   color: var(--ink-2);
 }
 
-.avoid-chip i {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  opacity: 0.75;
-}
-
-.reasoning {
-  display: grid;
-  gap: 12px;
-}
-
-/* Garments ------------------------------------------------------------- */
-.garment {
-  display: grid;
-  gap: 14px;
-}
-
-.garment-head {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.garment-swatch {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  flex: none;
-  border: 1px solid rgb(28 26 23 / 0.08);
-}
-
-.garment h3 {
-  font-size: 16px;
-  margin-bottom: 5px;
-}
-
-.tag {
-  display: inline-block;
-  font-size: 11.5px;
-  padding: 3px 9px;
-  border-radius: 999px;
+.aisle.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
   font-weight: 500;
 }
 
-.tag-good {
-  background: var(--accent-soft);
-  color: var(--accent);
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
-.tag-warn {
-  background: #f6ece4;
-  color: #8a4a22;
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
-.frame {
+.product {
   position: relative;
-  border-radius: var(--radius-sm);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   overflow: hidden;
-  background: var(--paper-2);
-  aspect-ratio: 3 / 4;
+  display: grid;
+  grid-template-rows: auto 1fr;
 }
 
-.frame-fill {
+.product.featured {
+  border-color: var(--accent);
+  border-width: 1.5px;
+}
+
+.ribbon {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.product-media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--paper-2);
+}
+
+.product-media img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-}
-
-.frame-fill.contain {
+  /* Product shots are tall bottles on white; cropping them loses the product. */
   object-fit: contain;
   background: #fff;
+  display: block;
 }
 
-.frame-you {
+.product-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.product-chip {
   position: absolute;
   right: 10px;
   bottom: 10px;
-  width: 58px;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   border: 2px solid #fff;
   box-shadow: var(--shadow);
 }
 
-/* Tab bar -------------------------------------------------------------- */
-.tabbar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  margin-inline: auto;
-  width: 100%;
-  max-width: 480px;
+.product-body {
+  padding: 16px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  background: rgb(251 250 247 / 0.92);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--line);
-  padding: 8px 8px calc(env(safe-area-inset-bottom) + 8px);
-  z-index: 20;
+  gap: 6px;
+  align-content: start;
 }
 
-.tab {
-  background: none;
-  border: 0;
-  padding: 11px 4px;
-  border-radius: 10px;
-  font-size: 13.5px;
+.brand-line {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
   color: var(--ink-2);
-  font-weight: 500;
 }
 
-.tab.active {
-  color: var(--ink);
-  background: var(--paper-2);
+.product-body h4 {
+  margin: 0;
+  font-size: 15px;
   font-weight: 600;
+  line-height: 1.3;
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  .tabbar {
-    background: var(--paper);
-    backdrop-filter: none;
+.why {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin-top: 4px;
+}
+
+.product-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn-sm {
+  width: auto;
+  padding: 9px 16px;
+  font-size: 13.5px;
+}
+
+.tryon-result {
+  margin-top: 10px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  width: 100%;
+}
+
+.tryon-result img {
+  width: 100%;
+  display: block;
+}
+
+.error-text {
+  color: #8a3a22;
+}
+
+/* Cart ------------------------------------------------------------------ */
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.lines li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.total-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 17px;
+}
+
+.empty {
+  text-align: center;
+  display: grid;
+  gap: 10px;
+  padding: 44px 20px;
+}
+
+.working {
+  text-align: center;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+/* Desktop --------------------------------------------------------------- */
+@media (min-width: 720px) {
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .land {
+    grid-template-columns: 1.5fr 1fr;
+  }
+  .verdict {
+    grid-template-columns: minmax(300px, 420px) 1fr;
+    gap: 44px;
+  }
+  .detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .split {
+    grid-template-columns: minmax(280px, 400px) 1fr;
+    gap: 40px;
   }
 }
 
-/* Camera --------------------------------------------------------------- */
+@media (min-width: 1000px) {
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .wrap {
+    padding: 32px 24px;
+  }
+}
+
+/* Camera ---------------------------------------------------------------- */
 .cam {
   display: grid;
   gap: 16px;
-  padding-inline: 20px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 20px;
 }
 
 .cam-stage {
@@ -353,20 +656,15 @@
   transform: scaleX(-1);
 }
 
-/* Framing guide: getting this right in the viewfinder avoids a rejected task.
-   A dimming scrim outside the guide reads consistently over any skin tone or
-   background, where a blend mode shifts hue unpredictably. */
+/* A dimming scrim outside the guide reads consistently over any skin tone,
+   where a blend mode shifts hue unpredictably. */
 .cam-guide {
   position: absolute;
-  inset: 0;
+  inset: 8% 16%;
   pointer-events: none;
   border: 2px solid rgb(255 255 255 / 0.92);
-  box-shadow: 0 0 0 100vmax rgb(16 18 15 / 0.42);
-}
-
-.cam-guide-face {
-  inset: 8% 16%;
   border-radius: 50%;
+  box-shadow: 0 0 0 100vmax rgb(16 18 15 / 0.42);
 }
 
 .cam-guide-body {
@@ -382,7 +680,6 @@
   margin: 0;
   text-align: center;
   font-size: 13px;
-  line-height: 1.45;
   color: #fff;
   background: rgb(16 18 15 / 0.62);
   backdrop-filter: blur(6px);
@@ -423,12 +720,36 @@
 .cam-error {
   display: grid;
   gap: 14px;
-  padding-inline: 20px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 20px;
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .cam-hint {
-    background: rgb(16 18 15 / 0.9);
+  .cam-hint,
+  .bar {
     backdrop-filter: none;
   }
+}
+
+/* The because list is the argument, so it reads as content, not a footnote. */
+.verdict-body .because {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.verdict-body .because li {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  padding-left: 16px;
+  border-left: 2px solid var(--accent);
+}
+
+.verdict-body .notice-error {
+  display: grid;
+  gap: 6px;
 }

@@ -74,13 +74,10 @@ button {
 
 /* App frame ------------------------------------------------------------ */
 .app {
-  max-width: 480px;
-  margin: 0 auto;
   min-height: 100dvh;
   background: var(--paper);
-  padding: calc(env(safe-area-inset-top) + 8px) 0
-    calc(env(safe-area-inset-bottom) + 92px);
-  position: relative;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 .pad {
