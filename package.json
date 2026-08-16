@@ -13,6 +13,7 @@
     "dev:web": "vite",
     "start": "bun server.ts",
     "api": "bun --hot server.ts",
+    "catalogue": "bun scripts/build-catalogue.ts",
     "test": "bun test"
   },
   "dependencies": {
