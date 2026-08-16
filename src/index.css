@@ -1,24 +1,27 @@
-@import url('https://fonts.bunny.net/css?family=outfit:400,500,600|jetbrains-mono:400,500');
+@import url('https://fonts.bunny.net/css?family=outfit:500,600,700|inter:400,500,600');
 
 :root {
-  /* Cool-clinical, single emerald accent. Locked across the whole app. */
-  --bg: #0c0e11;
-  --surface: #14171c;
-  --surface-2: #1b1f26;
-  --line: #262b33;
-  --text: #eef1f4;
-  --text-dim: #9aa3ae;
-  --accent: #34d399;
-  --accent-ink: #04120c;
-  --warn: #e0a03f;
+  /* Forest: bone ground, deep green accent. Chosen over the beige-and-brass
+     "artisan" default so garment swatches stay the most saturated thing on
+     screen, which matters when colour IS the product. */
+  --paper: #fbfaf7;
+  --paper-2: #f0efea;
+  --card: #ffffff;
+  --ink: #161a17;
+  --ink-2: #5f6660;
+  --line: #e3e3dd;
+  --accent: #1f4d38;
+  --accent-soft: #e4ede8;
+  --good: #1f4d38;
 
-  --radius: 14px;
-  --radius-sm: 10px;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 1px 2px rgb(28 26 23 / 0.04), 0 8px 24px rgb(28 26 23 / 0.06);
 
-  color-scheme: dark;
-  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
-  color: var(--text);
-  background: var(--bg);
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
 }
 
 * {
@@ -33,29 +36,31 @@ body,
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--paper);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Respect the notch on installed iOS PWAs. */
-#root {
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+/* Display face carries the editorial feel; body stays neutral for legibility. */
+.display {
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
 }
 
 h1,
 h2,
 h3 {
-  letter-spacing: -0.02em;
-  line-height: 1.15;
   margin: 0;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
   font-weight: 600;
 }
 
 p {
   margin: 0;
   line-height: 1.6;
-  color: var(--text-dim);
+  color: var(--ink-2);
 }
 
 button {
@@ -64,14 +69,51 @@ button {
 }
 
 .num {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 
-.shell {
-  max-width: 560px;
+/* App frame ------------------------------------------------------------ */
+.app {
+  max-width: 480px;
   margin: 0 auto;
-  padding: 24px 20px 96px;
+  min-height: 100dvh;
+  background: var(--paper);
+  padding: calc(env(safe-area-inset-top) + 8px) 0
+    calc(env(safe-area-inset-bottom) + 92px);
+  position: relative;
+}
+
+.pad {
+  padding-inline: 20px;
+}
+
+/* Top bar -------------------------------------------------------------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px 18px;
+}
+
+.brand {
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.textlink {
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.textlink:hover {
+  color: var(--ink);
 }
 
 /* Buttons -------------------------------------------------------------- */
@@ -81,12 +123,13 @@ button {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 15px 20px;
+  padding: 16px 20px;
   border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-ink);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
   font-weight: 600;
+  font-size: 15px;
   transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s;
 }
 
@@ -99,10 +142,15 @@ button {
   cursor: not-allowed;
 }
 
-.btn-ghost {
+.btn-quiet {
   background: transparent;
-  color: var(--text);
+  color: var(--ink);
   border: 1px solid var(--line);
+}
+
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
 }
 
 :where(button, a, input, [tabindex]):focus-visible {
@@ -110,38 +158,45 @@ button {
   outline-offset: 3px;
 }
 
-/* Cards and layout ----------------------------------------------------- */
+/* Surfaces ------------------------------------------------------------- */
 .card {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 20px;
+  box-shadow: var(--shadow);
 }
 
 .stack {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .muted {
-  color: var(--text-dim);
+  color: var(--ink-2);
   font-size: 14px;
 }
 
-/* Status messages ------------------------------------------------------ */
+.tiny {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+/* Status --------------------------------------------------------------- */
 .notice {
   border-radius: var(--radius-sm);
   padding: 14px 16px;
   font-size: 14px;
   line-height: 1.5;
   border: 1px solid var(--line);
-  background: var(--surface-2);
+  background: var(--paper-2);
 }
 
 .notice-error {
-  border-color: #5c2b2b;
-  background: #1e1315;
-  color: #f2c9c9;
+  border-color: #e6c9bf;
+  background: var(--accent-soft);
+  color: #7a3421;
 }
 
 /* Skeletons ------------------------------------------------------------ */
@@ -155,16 +210,35 @@ button {
   border-radius: var(--radius-sm);
   background: linear-gradient(
       90deg,
-      var(--surface-2) 25%,
-      #232830 50%,
-      var(--surface-2) 75%
+      var(--paper-2) 25%,
+      #f7f4ef 50%,
+      var(--paper-2) 75%
     )
     0 0 / 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
 
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Results are the payoff, so they arrive rather than just appear. */
+.rise {
+  animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton {
+    animation: none;
+  }
+  .rise {
     animation: none;
   }
   * {
