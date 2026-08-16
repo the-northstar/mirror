@@ -24,7 +24,19 @@ import {
 } from './src/lib/youcam'
 import { formulaFor, paletteFor } from './src/lib/prescription'
 import { GARMENTS } from './src/lib/garments'
-import { loadMakeup, loadShopify, SNAPSHOT, type Product } from './src/lib/catalogue'
+import {
+  addProducts,
+  createStore,
+  listStores,
+  loadMakeup,
+  loadShopify,
+  ordersFor,
+  placeOrder,
+  productsForAisle,
+  SNAPSHOT,
+  type Aisle,
+  type Product,
+} from './src/lib/catalogue'
 import {
   rankByPalette,
   rankFoundation,
@@ -236,11 +248,12 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
    * YouCam units.
    */
   'POST /api/shop': async (req) => {
-    const { skinHex, lipHex, concerns = [], faceShape } = (await req.json()) as {
+    const { skinHex, lipHex, concerns = [], faceShape, gender } = (await req.json()) as {
       skinHex?: string
       lipHex?: string
       concerns?: ConcernOut[]
       faceShape?: string
+      gender?: string
     }
     if (!skinHex || !/^#[0-9a-f]{6}$/i.test(skinHex)) {
       return json({ error: 'Missing skin colour from the scan.' }, 400)
@@ -264,14 +277,32 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       }),
     ])
 
+    // Merchant rows join the public feeds rather than replacing them, and
+    // ranking treats them identically: a store gets reach by matching the
+    // shopper, not by being uploaded.
+    const withStore = (aisle: Aisle, rows: Product[]) => [
+      ...rows,
+      ...productsForAisle(aisle),
+    ]
+
     const shortlists: Record<string, Ranked[]> = {
-      foundation: rankFoundation(foundations, skinHex),
-      lipstick: rankByPalette(lipsticks, palette),
-      blush: rankByPalette(blushes, palette),
-      clothes: rankByPalette(clothes, palette),
-      skincare: rankSkincare(SNAPSHOT.skincare, concerns),
-      glasses: rankGlasses(SNAPSHOT.glasses, faceShape),
-      jewellery: rankJewellery(SNAPSHOT.jewellery, palette),
+      foundation: rankFoundation(withStore('foundation', foundations), skinHex),
+      lipstick: rankByPalette(withStore('lipstick', lipsticks), palette),
+      blush: rankByPalette(withStore('blush', blushes), palette),
+      clothes: rankByPalette(withStore('clothes', clothes), palette),
+      skincare: rankSkincare(withStore('skincare', SNAPSHOT.skincare), concerns),
+      glasses: rankGlasses(withStore('glasses', SNAPSHOT.glasses), faceShape),
+      jewellery: rankJewellery(withStore('jewellery', SNAPSHOT.jewellery), palette),
+    }
+
+    // Detected gender demotes mismatched rows rather than removing them: the
+    // read can be wrong, and hiding menswear from a misread is worse than
+    // showing it lower down.
+    const wants = gender?.toLowerCase() === 'male' ? 'men' : gender?.toLowerCase() === 'female' ? 'women' : null
+    if (wants) {
+      for (const list of Object.values(shortlists)) {
+        list.sort((a, b) => rankAudience(a, wants) - rankAudience(b, wants))
+      }
     }
 
     const verdict = await judge(
@@ -309,6 +340,12 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   },
 
   /** Per-feed row counts and which shelves fell back to the snapshot. */
+  'GET /api/orders': async (req) => {
+    const storeId = new URL(req.url).searchParams.get('storeId')
+    if (!storeId) return json({ error: 'Missing store.' }, 400)
+    return json({ orders: ordersFor(storeId) })
+  },
+
   'GET /api/feeds': async () =>
     json({
       shelves: Object.fromEntries(
@@ -319,7 +356,59 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       ),
     }),
 
+  /* -- Merchant stores. A teammate owns persistence; this owns the shape. -- */
+
+  'POST /api/stores': async (req) => {
+    const { name, contactEmail } = (await req.json()) as Record<string, string>
+    if (!name?.trim()) return json({ error: 'A store needs a name.' }, 400)
+    if (!contactEmail?.includes('@')) {
+      return json({ error: 'A contact email is required for orders.' }, 400)
+    }
+    return json({ store: createStore({ name: name.trim(), contactEmail }) })
+  },
+
+  'GET /api/stores': async () => json({ stores: listStores() }),
+
+  /** Uploaded rows are validated, and rejects are reported with a reason. */
+  'POST /api/stores/products': async (req) => {
+    const { storeId, products } = (await req.json()) as {
+      storeId?: string
+      products?: unknown
+    }
+    if (!storeId) return json({ error: 'Missing store.' }, 400)
+    if (!Array.isArray(products) || products.length === 0) {
+      return json({ error: 'No products supplied.' }, 400)
+    }
+    try {
+      return json(addProducts(storeId, products as never))
+    } catch {
+      return json({ error: 'Unknown store.' }, 404)
+    }
+  },
+
+  /** Checkout takes ids and quantities only; prices are set here. */
+  'POST /api/orders': async (req) => {
+    const { lines } = (await req.json()) as { lines?: Array<{ productId: string; qty: number }> }
+    if (!Array.isArray(lines) || lines.length === 0) {
+      return json({ error: 'Your bag is empty.' }, 400)
+    }
+    const placed = placeOrder(lines)
+    if (placed.length === 0) {
+      return json(
+        { error: 'Nothing in your bag can be ordered yet. Only store-listed items ship.' },
+        400,
+      )
+    }
+    return json({ orders: placed })
+  },
+
   'GET /api/catalogue': async () => json({ garments: GARMENTS }),
+}
+
+/** Mismatched audience sinks; unisex and unset stay neutral. */
+function rankAudience(p: { audience?: string }, wants: string): number {
+  if (!p.audience || p.audience === 'unisex') return 0
+  return p.audience === wants ? -1 : 1
 }
 
 /** YouCam fetches ref_file_url from its own servers, so it must be public. */

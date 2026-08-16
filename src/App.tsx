@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Camera } from './Camera'
 import { Studio } from './Studio'
+import { fileToDataUrl, loadScans, relativeTime, removeScan, saveScan, type PastScan } from './lib/history'
 import './App.css'
 
 /* -- Types mirroring the API ------------------------------------------- */
@@ -73,12 +74,14 @@ export default function App() {
   const [photo, setPhoto] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
+  const [scans, setScans] = useState<PastScan[]>([])
 
   // One key per module. The prescription is deliberately NOT persisted: the
   // shelf may have changed underneath it, so it is recomputed on restore.
   useEffect(() => {
     const raw = localStorage.getItem('mirror.cart')
     if (raw) setCart(JSON.parse(raw))
+    setScans(loadScans())
   }, [])
   useEffect(() => {
     localStorage.setItem('mirror.cart', JSON.stringify(cart))
@@ -95,11 +98,35 @@ export default function App() {
       const body = await res.json().catch(() => null)
       if (!res.ok || !body?.color) throw new Error(body?.error ?? 'The scan failed.')
       setReading(body)
+      // A scan costs units, so keep it: re-opening one later is free.
+      try {
+        const dataUrl = await fileToDataUrl(file)
+        setPhoto(dataUrl)
+        setScans(
+          saveScan({
+            photo: dataUrl,
+            fileId: body.fileId,
+            skinHex: body.color.skin_color,
+            season: body.palette.season,
+            reading: body,
+          }),
+        )
+      } catch {
+        // History is a convenience; a failure here must not lose the scan.
+      }
       setScreen('diagnosis')
     } catch (err) {
       setError((err as Error).message)
       setScreen('land')
     }
+  }, [])
+
+  const reopen = useCallback((scan: PastScan) => {
+    setReading(scan.reading as Reading)
+    setPhoto(scan.photo)
+    // The shop is recomputed rather than restored: the shelf may have moved.
+    setShop(null)
+    setScreen('diagnosis')
   }, [])
 
   const openShop = useCallback(async () => {
@@ -115,6 +142,7 @@ export default function App() {
           lipHex: reading.color.lip_color,
           concerns: reading.concerns,
           faceShape: reading.face?.faceshape,
+          gender: reading.face?.agegender?.gender,
         }),
       })
       const body = await res.json()
@@ -131,23 +159,36 @@ export default function App() {
     <div className="app">
       <header className="bar">
         <button className="brand" onClick={() => setScreen(reading ? 'diagnosis' : 'land')}>
+          <span className="brand-mark" aria-hidden />
           Mirror
         </button>
-        <nav className="bar-nav">
-          {reading && (
-            <>
-              <button className="textlink" onClick={() => setScreen('diagnosis')}>
-                Diagnosis
-              </button>
-              <button className="textlink" onClick={openShop}>
-                Shop
-              </button>
-            </>
-          )}
-          <button className="cart-btn" onClick={() => setScreen('cart')}>
-            Bag{count > 0 && <span className="pip">{count}</span>}
-          </button>
-        </nav>
+
+        {reading && (
+          <nav className="bar-nav" aria-label="Main">
+            <button
+              className={screen === 'diagnosis' ? 'navlink on' : 'navlink'}
+              aria-current={screen === 'diagnosis'}
+              onClick={() => setScreen('diagnosis')}
+            >
+              Diagnosis
+            </button>
+            <button
+              className={screen === 'shop' ? 'navlink on' : 'navlink'}
+              aria-current={screen === 'shop'}
+              onClick={openShop}
+            >
+              Studio
+            </button>
+          </nav>
+        )}
+
+        <button
+          className="cart-btn"
+          onClick={() => setScreen('cart')}
+          aria-label={`Bag, ${count} item${count === 1 ? '' : 's'}`}
+        >
+          Bag{count > 0 && <span className="pip">{count}</span>}
+        </button>
       </header>
 
       {error && (
@@ -156,8 +197,15 @@ export default function App() {
         </p>
       )}
 
-      {screen === 'land' && <Land onFile={scan} />}
-      {screen === 'scanning' && <Scanning />}
+      {screen === 'land' && (
+        <Land
+          onFile={scan}
+          scans={scans}
+          onReopen={reopen}
+          onForget={(id) => setScans(removeScan(id))}
+        />
+      )}
+      {screen === 'scanning' && <Scanning photo={photo} />}
       {screen === 'diagnosis' && reading && (
         <Diagnosis reading={reading} photo={photo} onShop={openShop} />
       )}
@@ -178,7 +226,17 @@ export default function App() {
 
 /* -- Land --------------------------------------------------------------- */
 
-function Land({ onFile }: { onFile: (f: File) => void }) {
+function Land({
+  onFile,
+  scans,
+  onReopen,
+  onForget,
+}: {
+  onFile: (f: File) => void
+  scans: PastScan[]
+  onReopen: (s: PastScan) => void
+  onForget: (id: string) => void
+}) {
   const [shooting, setShooting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -235,6 +293,33 @@ function Land({ onFile }: { onFile: (f: File) => void }) {
           <li>Close up, your face filling most of the photo</li>
           <li>Even light, facing the camera</li>
         </ul>
+
+        {scans.length > 0 && (
+          <section className="history">
+            <h2 className="kicker">Your earlier scans</h2>
+            <p className="tiny">Re-open one to skip the scan. It costs nothing.</p>
+            <ul className="history-row">
+              {scans.map((s) => (
+                <li key={s.id}>
+                  <button className="history-item" onClick={() => onReopen(s)}>
+                    <img src={s.photo} alt="" />
+                    <span className="history-meta">
+                      <span className="history-season">{s.season}</span>
+                      <span className="tiny">{relativeTime(s.at)}</span>
+                    </span>
+                  </button>
+                  <button
+                    className="history-x"
+                    onClick={() => onForget(s.id)}
+                    aria-label="Forget this scan"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
       <aside className="land-aside" aria-hidden>
         <div className="chip-row">
@@ -248,20 +333,41 @@ function Land({ onFile }: { onFile: (f: File) => void }) {
   )
 }
 
-function Scanning() {
-  const steps = ['Uploading', 'Reading colour', 'Reading condition', 'Building your prescription']
+const SCAN_STEPS = [
+  'Uploading your photo',
+  'Measuring skin colour',
+  'Reading skin condition',
+  'Reading face shape',
+  'Building your prescription',
+]
+
+function Scanning({ photo }: { photo: string | null }) {
   const [i, setI] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => setI((v) => Math.min(v + 1, steps.length - 1)), 3500)
+    // Roughly matches how long the three parallel tasks actually take; the
+    // point is to name the work, not to fake a percentage.
+    const t = setInterval(() => setI((v) => Math.min(v + 1, SCAN_STEPS.length - 1)), 3200)
     return () => clearInterval(t)
   }, [])
+
   return (
-    <main className="wrap" aria-live="polite">
-      <div className="skeleton" style={{ height: 280, borderRadius: 18 }} />
-      <p className="working">{steps[i]}…</p>
-      <div className="grid-2">
-        <div className="skeleton" style={{ height: 90 }} />
-        <div className="skeleton" style={{ height: 90 }} />
+    <main className="wrap scanning" aria-live="polite" aria-busy="true">
+      <div className="scanning-media">
+        {photo && <img src={photo} alt="" className="scan-photo scanning-photo" />}
+        <span className="scan-sweep" aria-hidden />
+      </div>
+      <div className="scanning-body">
+        <p className="kicker">Scanning</p>
+        <h2 className="display h-lg">{SCAN_STEPS[i]}</h2>
+        <ol className="steps">
+          {SCAN_STEPS.map((s, idx) => (
+            <li key={s} className={idx < i ? 'done' : idx === i ? 'now' : ''}>
+              <span className="step-dot" aria-hidden />
+              {s}
+            </li>
+          ))}
+        </ol>
+        <p className="tiny">This takes about twenty seconds. Three YouCam reads run at once.</p>
       </div>
     </main>
   )
@@ -413,6 +519,19 @@ function Diagnosis({
 
 /* -- Shop --------------------------------------------------------------- */
 
+/** What each aisle is for, so the chooser reads as a decision not a menu. */
+const AISLE_BLURB: Record<string, string> = {
+  foundation: 'Matched to your measured skin colour',
+  lipstick: 'Ranked against your palette',
+  blush: 'Ranked against your palette',
+  skincare: 'Aimed at what your scan flagged',
+  clothes: 'Colours that suit your undertone',
+  glasses: 'Frames for your measured face shape',
+  jewellery: 'Metals for your undertone',
+  cloth: 'See garments on your own photo',
+  hair: 'See cuts on your own photo',
+}
+
 function ShopView({
   shop,
   reading,
@@ -424,7 +543,8 @@ function ShopView({
   photo: string | null
   onAdd: (id: string) => void
 }) {
-  const [aisle, setAisle] = useState('foundation')
+  // Null means "not chosen yet", which is what shows the chooser.
+  const [aisle, setAisle] = useState<string | null>(null)
 
   if (!shop) {
     return (
@@ -439,14 +559,69 @@ function ShopView({
     )
   }
 
+  const available = [
+    ...AISLES.filter((a) => (shop.shortlists[a.key]?.length ?? 0) > 0),
+    ...STUDIOS.map((s) => ({ key: s.key as string, label: s.label })),
+  ]
+
+  // Choose what you are shopping for first; a wall of foundation is not a
+  // starting point when six other aisles are ranked and waiting.
+  if (!aisle) {
+    return (
+      <main className="wrap stack-lg">
+        <section>
+          <h2 className="display h-lg">What are you shopping for?</h2>
+          <p className="lead">
+            Everything below is already ranked against your scan. Pick where to
+            start.
+          </p>
+          {shop.together && <p className="lead lead-2">{shop.together}</p>}
+        </section>
+        <div className="chooser">
+          {available.map((a) => {
+            const top = shop.shortlists[a.key]?.[0]
+            return (
+              <button key={a.key} className="choice" onClick={() => setAisle(a.key)}>
+                <span className="choice-art">
+                  {top?.image ? (
+                    <img src={top.image} alt="" loading="lazy" />
+                  ) : (
+                    <span
+                      className="choice-fill"
+                      style={{ background: top?.hex ?? 'var(--paper-2)' }}
+                    />
+                  )}
+                </span>
+                <span className="choice-body">
+                  <strong>{a.label}</strong>
+                  <span className="tiny">{AISLE_BLURB[a.key] ?? ''}</span>
+                  {shop.shortlists[a.key] && (
+                    <span className="tiny choice-count">
+                      {shop.shortlists[a.key].length} ranked
+                    </span>
+                  )}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </main>
+    )
+  }
+
   const items = shop.shortlists[aisle] ?? []
   const pick = shop.picks[aisle]
 
   return (
     <main className="wrap stack-lg">
-      <section>
-        <h2 className="display h-lg">Chosen for you</h2>
-        {shop.together && <p className="lead">{shop.together}</p>}
+      <section className="shop-head">
+        <button className="backlink" onClick={() => setAisle(null)}>
+          ← All categories
+        </button>
+        <h2 className="display h-lg">
+          {available.find((a) => a.key === aisle)?.label ?? 'Chosen for you'}
+        </h2>
+        <p className="tiny">{AISLE_BLURB[aisle] ?? ''}</p>
       </section>
 
       <nav className="aisles" aria-label="Categories">
@@ -474,7 +649,7 @@ function ShopView({
 
       {(aisle === 'cloth' || aisle === 'hair') && (
         <Studio
-          kind={aisle}
+          kind={aisle as 'cloth' | 'hair'}
           fileId={reading.fileId}
           photo={photo}
           formulaNote={

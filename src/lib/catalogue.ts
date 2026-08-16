@@ -1,11 +1,28 @@
 import { colorName } from './color'
 
 /** One sellable thing, whatever aisle it came from. */
+export type Aisle =
+  | 'foundation'
+  | 'lipstick'
+  | 'blush'
+  | 'skincare'
+  | 'clothes'
+  | 'glasses'
+  | 'jewellery'
+
+/** Who a product is cut for. Unset means it suits anyone. */
+export type Audience = 'women' | 'men' | 'unisex'
+
 export interface Product {
   id: string
-  aisle: 'foundation' | 'lipstick' | 'blush' | 'skincare' | 'clothes' | 'glasses' | 'jewellery'
+  aisle: Aisle
   brand: string
   name: string
+  /** Defaults to unisex: hiding a product is worse than ranking it lower. */
+  audience?: Audience
+  /** Set when the row came from a merchant store rather than a public feed. */
+  storeId?: string
+  stock?: number
   /** Measured or published colour. Rows without one are dropped, not defaulted. */
   hex: string
   colorName: string
@@ -188,3 +205,147 @@ function j(id: string, brand: string, name: string, hex: string, tags: string[])
 function s(id: string, brand: string, name: string, tags: string[]): Product {
   return { id, aisle: 'skincare', brand, name, hex: '#e8e4dd', colorName: 'neutral', tags }
 }
+
+
+/* -- Merchant stores ---------------------------------------------------- */
+
+/**
+ * Products uploaded by a merchant, kept beside the public feeds rather than
+ * replacing them: a new store with four items should not empty the shelves.
+ *
+ * Held in memory here. The persistence layer is a teammate's work in progress,
+ * so this module only owns the shape and the merge.
+ * TODO(store): swap for the shared datastore once that lands.
+ */
+export interface Store {
+  id: string
+  name: string
+  contactEmail: string
+}
+
+const stores = new Map<string, Store>()
+const storeProducts = new Map<string, Product[]>()
+
+export function createStore(input: Omit<Store, 'id'>): Store {
+  const store: Store = { ...input, id: `store-${slug(input.name)}-${stores.size + 1}` }
+  stores.set(store.id, store)
+  storeProducts.set(store.id, [])
+  return store
+}
+
+export const getStore = (id: string) => stores.get(id)
+export const listStores = () => [...stores.values()]
+
+/**
+ * Add products to a store.
+ *
+ * Rows without a resolvable colour are rejected rather than stored: every
+ * ranker here sorts on colour, so an uncoloured row would be noise pretending
+ * to be a recommendation.
+ */
+export function addProducts(
+  storeId: string,
+  rows: Array<Partial<Product> & { name: string; hex?: string; colorWord?: string }>,
+): { added: Product[]; rejected: Array<{ name: string; why: string }> } {
+  const store = stores.get(storeId)
+  if (!store) throw new Error('Unknown store')
+
+  const added: Product[] = []
+  const rejected: Array<{ name: string; why: string }> = []
+
+  for (const row of rows) {
+    const hex = row.hex?.match(/^#[0-9a-f]{6}$/i)
+      ? row.hex
+      : row.colorWord
+        ? namedColorHex(row.colorWord)
+        : null
+
+    if (!hex) {
+      rejected.push({ name: row.name, why: 'No colour we could resolve.' })
+      continue
+    }
+    if (!row.aisle) {
+      rejected.push({ name: row.name, why: 'No aisle given.' })
+      continue
+    }
+
+    added.push({
+      id: `${storeId}-${slug(row.name)}-${added.length}`,
+      aisle: row.aisle,
+      brand: row.brand ?? store.name,
+      name: row.name,
+      hex,
+      colorName: colorName(hex),
+      shadeName: row.shadeName ?? row.colorWord,
+      price: row.price,
+      image: row.image,
+      url: row.url,
+      audience: row.audience ?? 'unisex',
+      storeId,
+      stock: row.stock,
+      tags: row.tags ?? [],
+    })
+  }
+
+  storeProducts.set(storeId, [...(storeProducts.get(storeId) ?? []), ...added])
+  return { added, rejected }
+}
+
+export const productsForAisle = (aisle: Aisle): Product[] =>
+  [...storeProducts.values()].flat().filter((p) => p.aisle === aisle)
+
+export const findProduct = (id: string): Product | undefined =>
+  [...storeProducts.values()].flat().find((p) => p.id === id)
+
+/* -- Orders ------------------------------------------------------------- */
+
+export interface OrderLine {
+  productId: string
+  qty: number
+}
+
+export interface Order {
+  id: string
+  at: number
+  storeId: string
+  lines: Array<{ product: Product; qty: number; unitPrice: number }>
+  total: number
+}
+
+const orders = new Map<string, Order[]>()
+
+/**
+ * Place an order.
+ *
+ * Takes ids and quantities only and re-prices every line here, so a tampered
+ * client cannot set its own price.
+ */
+export function placeOrder(lines: OrderLine[]): Order[] {
+  const byStore = new Map<string, Order['lines']>()
+
+  for (const line of lines) {
+    const product = findProduct(line.productId)
+    // Public-feed rows are not orderable: there is no merchant to fulfil them.
+    if (!product?.storeId) continue
+    const qty = Math.max(1, Math.floor(line.qty))
+    const group = byStore.get(product.storeId) ?? []
+    group.push({ product, qty, unitPrice: product.price ?? 0 })
+    byStore.set(product.storeId, group)
+  }
+
+  const placed: Order[] = []
+  for (const [storeId, group] of byStore) {
+    const order: Order = {
+      id: `ord-${storeId}-${(orders.get(storeId)?.length ?? 0) + 1}`,
+      at: Date.now(),
+      storeId,
+      lines: group,
+      total: group.reduce((sum, l) => sum + l.unitPrice * l.qty, 0),
+    }
+    orders.set(storeId, [...(orders.get(storeId) ?? []), order])
+    placed.push(order)
+  }
+  return placed
+}
+
+export const ordersFor = (storeId: string) => orders.get(storeId) ?? []
