@@ -1622,3 +1622,35 @@
 .tryon-result {
   margin: 10px 0 0;
 }
+
+/* The stylist's line: model-written, so it is marked as such rather than
+   passed off as another measurement. */
+.stylist {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 70ch;
+}
+
+.stylist-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+  margin-top: 7px;
+}
+
+.why-model {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: var(--ink);
+}

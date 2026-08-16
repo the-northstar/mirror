@@ -98,6 +98,40 @@ matching the shopper. Rows without a resolvable colour are rejected with a
 reason, since every ranker sorts on colour. Orders take ids and quantities only
 and are re-priced server-side.
 
+## SDK
+
+The same engine drops onto a retailer's own storefront, ranking **their**
+catalogue instead of ours. Full reference: **[docs/sdk.md](docs/sdk.md)**.
+
+One line for the widget — Mirror opens in an overlay over their site:
+
+```html
+<script src="https://mirror.pykero.com/sdk/mirror.js"
+        data-store="store-acme-1" defer></script>
+```
+
+Or headless, for retailers who want their own interface:
+
+```ts
+const mirror  = createMirror({ storeId: 'store-acme-1' })
+const reading = await mirror.scan(file)
+const shop    = await mirror.shop(reading)
+```
+
+The widget is a thin layer over that client, so nothing is reachable through
+the overlay that is not reachable without it. It renders in an iframe: the
+host page's CSS cannot break the scan, and ours cannot leak onto their page.
+
+Catalogues arrive four ways — a hosted JSON/CSV feed, a Shopify storefront
+domain, an authenticated push, or inline in the snippet. All four land in the
+same validation, so a row without a resolvable colour is rejected with a reason
+whichever door it came through.
+
+Writes are authenticated by a per-store key sent as a Bearer token, and the
+**key identifies the store** rather than the request body naming one — so a key
+can only ever write to its own shelf. It is returned once at store creation and
+stripped from every listing.
+
 ## Running it
 
 ```bash

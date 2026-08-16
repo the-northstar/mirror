@@ -38,13 +38,19 @@ import {
   loadClothes,
   loadSkincare,
   loadShopify,
+  getStore,
   ordersFor,
   placeOrder,
   productsForAisle,
+  productsForStore,
+  replaceStoreProducts,
+  setStoreFeed,
+  storeByKey,
   SNAPSHOT,
   type Aisle,
   type Product,
 } from './src/lib/catalogue'
+import { detectKind, fetchFeed, type FeedKind } from './src/lib/feed'
 import {
   rankByPalette,
   rankFoundation,
@@ -158,6 +164,19 @@ async function averageColor(bytes: ArrayBuffer): Promise<string | null> {
   }
 }
 
+/**
+ * The SDK is embedded on domains we do not know in advance, so the origin is
+ * open. Safe here because these routes carry no cookies and no session: the
+ * only privileged one is authenticated by a Bearer key, which a browser will
+ * not attach on its own.
+ */
+const CORS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+}
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -178,6 +197,18 @@ function fail(err: unknown, where: string): Response {
   // through untouched and is truthful — the upstream call failed, not the
   // gateway.
   return json({ error: message, code: e.code, owner }, owner === 'shopper' ? 400 : 500)
+}
+
+/**
+ * The store behind an SDK request's key.
+ *
+ * Read from the Authorization header rather than the body or a query string:
+ * a key in a URL ends up in access logs and Referer headers.
+ */
+function storeFromKey(req: Request) {
+  const header = req.headers.get('authorization') ?? ''
+  const key = header.replace(/^Bearer\s+/i, '').trim()
+  return key ? storeByKey(key) : undefined
 }
 
 async function readImage(req: Request): Promise<File> {
@@ -382,7 +413,8 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
    * YouCam units.
    */
   'POST /api/shop': async (req) => {
-    const { skinHex, lipHex, concerns = [], faceShape, gender } = (await req.json()) as {
+    const { skinHex, lipHex, concerns = [], faceShape, gender, storeId } = (await req.json()) as {
+      storeId?: string
       skinHex?: string
       lipHex?: string
       concerns?: ConcernOut[]
@@ -424,10 +456,13 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     // Merchant rows join the public feeds rather than replacing them, and
     // ranking treats them identically: a store gets reach by matching the
     // shopper, not by being uploaded.
-    const withStore = (aisle: Aisle, rows: Product[]) => [
-      ...rows,
-      ...productsForAisle(aisle),
-    ]
+    //
+    // The SDK is the exception: embedded on a retailer's own site, it must
+    // recommend only what that retailer actually sells.
+    const withStore = (aisle: Aisle, rows: Product[]) =>
+      storeId
+        ? productsForStore(storeId).filter((p) => p.aisle === aisle)
+        : [...rows, ...productsForAisle(aisle)]
 
     // Hair templates are YouCam's own catalogue, shaped as products so the
     // aisle behaves like the others. Ordered by the detected gender when we
@@ -573,6 +608,59 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     }
   },
 
+  /* -- SDK: server-to-server feed, authenticated by the store's key -------- */
+
+  /**
+   * Push a catalogue. The key identifies the store, so a merchant can only
+   * ever write to their own shelf — the body never names one.
+   */
+  'POST /api/sdk/products': async (req) => {
+    const store = storeFromKey(req)
+    if (!store) return json({ error: 'Invalid or missing API key.' }, 401)
+
+    const { products, replace } = (await req.json()) as {
+      products?: unknown
+      replace?: boolean
+    }
+    if (!Array.isArray(products) || products.length === 0) {
+      return json({ error: 'No products supplied.' }, 400)
+    }
+    // A re-push of a full catalogue should not double it.
+    if (replace) replaceStoreProducts(store.id, [])
+    const result = addProducts(store.id, products as never)
+    await persistOrders().catch(() => {})
+    return json(result)
+  },
+
+  /** Point the store at a hosted feed and pull it once, now. */
+  'POST /api/sdk/feed': async (req) => {
+    const store = storeFromKey(req)
+    if (!store) return json({ error: 'Invalid or missing API key.' }, 401)
+
+    const { url, kind } = (await req.json()) as { url?: string; kind?: FeedKind }
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return json({ error: 'A feed url is required.' }, 400)
+    }
+    try {
+      const rows = await fetchFeed(url, kind ?? detectKind(url))
+      // A feed is the whole catalogue, so it replaces rather than appends.
+      replaceStoreProducts(store.id, [])
+      const result = addProducts(store.id, rows as never)
+      setStoreFeed(store.id, url, kind ?? detectKind(url))
+      return json({ ...result, url })
+    } catch (err) {
+      return json({ error: `Could not read that feed: ${(err as Error).message}` }, 400)
+    }
+  },
+
+  /** What the widget calls on load: the store's own shelf, public and keyless. */
+  'GET /api/sdk/catalogue': async (req) => {
+    const storeId = new URL(req.url).searchParams.get('storeId')
+    if (!storeId) return json({ error: 'Missing storeId.' }, 400)
+    if (!getStore(storeId)) return json({ error: 'Unknown store.' }, 404)
+    return json({ products: productsForStore(storeId) })
+  },
+
   /** Checkout takes ids and quantities only; prices are set here. */
   'POST /api/orders': async (req) => {
     const { lines } = (await req.json()) as { lines?: Array<{ productId: string; qty: number }> }
@@ -627,11 +715,24 @@ Bun.serve({
   idleTimeout: 255,
   async fetch(req) {
     const url = new URL(req.url)
+
+    // The SDK runs on the retailer's own domain, so its routes are the only
+    // cross-origin ones. Everything else stays same-origin by default.
+    const isSdk =
+      url.pathname.startsWith('/api/sdk/') || url.pathname === '/api/stores/products'
+    if (isSdk && req.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS })
+    }
+
     const route = routes[`${req.method} ${url.pathname}`]
 
     if (route) {
       try {
-        return await route(req)
+        const res = await route(req)
+        if (!isSdk) return res
+        const headers = new Headers(res.headers)
+        for (const [k, v] of Object.entries(CORS)) headers.set(k, v)
+        return new Response(res.body, { status: res.status, headers })
       } catch (err) {
         return fail(err, url.pathname)
       }

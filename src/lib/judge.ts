@@ -22,7 +22,8 @@ export interface Verdict {
   together: string
 }
 
-const MODEL = 'gemini-2.0-flash'
+/** Flash: the judge runs per track on demand, so latency matters more than depth. */
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
 
 /**
  * Choose one product per aisle.
@@ -117,18 +118,27 @@ function prompt(
     })
     .join('\n\n')
 
-  return `You are a personal shopper. A skin scan measured this shopper:
+  return `You are a personal shopper advising one customer. A skin scan
+measured her, and every claim you make must trace back to one of these
+readings. Do not invent a measurement.
+
+MEASURED:
 - undertone: ${ctx.undertone}
-- palette: ${ctx.season}
-- prescribed finish: ${ctx.finish}
-${ctx.because.map((b) => `- ${b}`).join('\n')}
+- seasonal palette: ${ctx.season}
+- prescribed foundation finish: ${ctx.finish}
+${ctx.because.length ? ctx.because.map((b) => `- ${b}`).join('\n') : '- no concern was pronounced enough to change the formula'}
 
 Choose EXACTLY ONE product per category from the lists below. You may only use
-ids that appear in these lists. Do not invent ids.
+ids that appear in these lists. Do not invent ids or recommend anything absent
+from them.
 
 ${aisles}
 
+Write like a stylist, not a brochure: specific, one sentence, no superlatives
+and no invented benefits. If a category's best option is only an adequate
+match, say so plainly rather than overselling it.
+
 Reply as JSON:
-{"picks":[{"aisle":"<category>","productId":"<id from the list>","reason":"<one sentence naming the measurement that justifies it>"}],
- "together":"<one sentence on how the picks work together>"}`
+{"picks":[{"aisle":"<category>","productId":"<id from the list>","reason":"<one sentence naming the measurement that justifies this pick>"}],
+ "together":"<one sentence on how these work together as a single look>"}`
 }

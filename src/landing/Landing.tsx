@@ -72,6 +72,22 @@ const SHOPKEEPER = [
   },
 ]
 
+/** How a retailer's catalogue gets in. Four routes, one validation. */
+const SDK_FEEDS = [
+  {
+    t: 'A feed you host',
+    d: 'Point us at a products.json or CSV you already publish. Nothing to build.',
+  },
+  {
+    t: 'Shopify',
+    d: 'Give us the storefront domain. No app to install, no key to generate.',
+  },
+  {
+    t: 'Push API',
+    d: 'POST your rows with a store key when your catalogue changes.',
+  },
+]
+
 const CHIPS = [
   'POST /skin-analysis',
   'POST /skin-tone',
@@ -373,7 +389,51 @@ export function Landing({
         </div>
       </section>
 
-      {/* 12 — Footer CTA */}
+      {/* 12 — SDK. The retailer has just been sold on listing; this answers the
+          next question, which is whether they have to send shoppers here. */}
+      <Spotlight>
+        <div className="mx-auto max-w-[1400px]">
+          <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-[var(--copper)]">
+            Or keep them on your own site
+          </p>
+          <h2 className="mt-5 max-w-2xl font-serif text-4xl leading-[1.05] tracking-[-0.02em] text-[color-mix(in_oklab,var(--paper)_92%,transparent)] sm:text-5xl">
+            One line of HTML. Your catalogue, measured.
+          </h2>
+          <p className="mt-7 max-w-xl text-[17px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_65%,transparent)]">
+            Drop the widget on your storefront and Mirror opens over it — the shopper is read,
+            and only <em>your</em> products are ranked against them. Or call the engine
+            headlessly and render the result in your own interface.
+          </p>
+
+          <pre className="mt-12 overflow-x-auto rounded-lg border border-[color-mix(in_oklab,var(--paper)_18%,transparent)] bg-[color-mix(in_oklab,var(--paper)_6%,transparent)] p-6 font-mono text-[12px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_85%,transparent)]">
+{`<script src="https://mirror.pykero.com/sdk/mirror.js"
+        data-store="store-acme-1" defer></script>`}
+          </pre>
+
+          <div className="mt-12 grid gap-8 sm:grid-cols-3">
+            {SDK_FEEDS.map((f) => (
+              <div
+                key={f.t}
+                className="border-t border-[color-mix(in_oklab,var(--paper)_22%,transparent)] pt-5"
+              >
+                <h3 className="font-serif text-xl text-[color-mix(in_oklab,var(--paper)_92%,transparent)]">
+                  {f.t}
+                </h3>
+                <p className="mt-2 text-[14px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_60%,transparent)]">
+                  {f.d}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-12 max-w-xl font-mono text-[12px] leading-relaxed text-[var(--signal)]">
+            Rows without a resolvable colour are rejected rather than stored — ranking sorts on
+            colour, so an uncoloured row would be noise pretending to be a recommendation.
+          </p>
+        </div>
+      </Spotlight>
+
+      {/* 13 — Footer CTA */}
       <footer className="mx-auto max-w-[1400px] px-6 py-28 sm:px-10 lg:py-36">
         <h2 className="max-w-3xl font-serif text-[3rem] leading-[0.98] tracking-[-0.03em] sm:text-[4rem]">
           Stop paying to find out.

@@ -685,6 +685,12 @@ function ShopView({
           {AISLE_BLURB[aisle] ?? ''}
           {items.length > 0 && ` · ${items.length} ranked for you`}
         </p>
+        {shop.together && (
+          <p className="stylist">
+            <span className="stylist-mark" aria-hidden />
+            {shop.together}
+          </p>
+        )}
       </section>
 
       <nav className="aisles" aria-label="Categories">
@@ -770,7 +776,7 @@ function ProductCard({
 }: {
   product: RankedItem
   featured: boolean
-  featuredNote?: { source: 'model' | 'match' }
+  featuredNote?: { source: 'model' | 'match'; reason?: string }
   onAdd: (id: string) => void
   reading: Reading
   makeupEffects: unknown[]
@@ -801,6 +807,12 @@ function ProductCard({
         <h4>{decode(product.name)}</h4>
         {product.shadeName && <p className="tiny">{product.shadeName}</p>}
         <p className="why">{product.reason}</p>
+        {featured && featuredNote?.source === 'model' && featuredNote.reason && (
+          <p className="why why-model">
+            <span className="stylist-mark" aria-hidden />
+            {featuredNote.reason}
+          </p>
+        )}
         <div className="product-actions">
           {canBuy && (
             <button className="btn btn-sm" onClick={() => onAdd(product.id)}>

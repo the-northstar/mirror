@@ -461,6 +461,10 @@ export function setOwnerProducts(rows: Product[]): void {
 export const productsForAisle = (aisle: Aisle): Product[] =>
   [...storeProducts.values()].flat().filter((p) => p.aisle === aisle)
 
+/** One store's shelf — what the embedded widget ranks against. */
+export const productsForStore = (storeId: string): Product[] =>
+  storeProducts.get(storeId) ?? []
+
 export const findProduct = (id: string): Product | undefined =>
   [...storeProducts.values()].flat().find((p) => p.id === id)
 
