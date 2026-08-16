@@ -53,6 +53,26 @@ const AISLES = [
   },
 ]
 
+/* What a retailer actually does here, in the order they do it. Mirrors the two
+   ways into the Store screen: one product at a time, or a spreadsheet. */
+const SHOPKEEPER = [
+  {
+    n: '01',
+    t: 'List what you sell',
+    d: 'Add products one at a time, or import the whole catalogue from a spreadsheet.',
+  },
+  {
+    n: '02',
+    t: 'Shoppers get measured',
+    d: 'One selfie reads undertone, depth, face shape and seven skin concerns.',
+  },
+  {
+    n: '03',
+    t: 'They try it on themselves',
+    d: 'Your item is ranked against that reading, then rendered onto their own photo.',
+  },
+]
+
 const CHIPS = [
   'POST /skin-analysis',
   'POST /skin-tone',
@@ -65,18 +85,21 @@ const CHIPS = [
 export function Landing({
   onCamera,
   onFile,
+  onStore,
   scans,
   onReopen,
   onForget,
 }: {
   onCamera: () => void
   onFile: (f: File) => void
+  onStore: () => void
   scans: PastScan[]
   onReopen: (s: PastScan) => void
   onForget: (id: string) => void
 }) {
   const problemRef = useReveal()
   const numbersRef = useReveal()
+  const storeRef = useReveal()
   const inputRef = useRef<HTMLInputElement>(null)
 
   return (
@@ -317,7 +340,41 @@ export function Landing({
         </div>
       </Spotlight>
 
-      {/* 11 — Footer CTA */}
+      {/* 11 — For stores. Sits after the shopper's case is made: a retailer only
+          cares that the match is measured once they have seen it work. */}
+      <section className="border-y border-[color-mix(in_oklab,var(--ink)_12%,transparent)] bg-[color-mix(in_oklab,var(--bone)_60%,var(--paper))]">
+        <div ref={storeRef} className="reveal mx-auto max-w-[1400px] px-6 py-28 sm:px-10 lg:py-36">
+          <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-[var(--copper)]">
+            For stores
+          </p>
+          <h2 className="mt-5 max-w-3xl font-serif text-4xl leading-[1.05] tracking-[-0.02em] sm:text-5xl">
+            Join as a store. Add your products, and let people try them on.
+          </h2>
+          <p className="mt-7 max-w-xl text-[17px] leading-relaxed text-[var(--pencil)]">
+            What you list is ranked against each shopper&rsquo;s own measurements and rendered onto
+            their photo — so they see it on themselves, not on a model, with the reason named.
+          </p>
+          <ol className="mt-16 grid gap-10 sm:grid-cols-3">
+            {SHOPKEEPER.map((s) => (
+              <li
+                key={s.n}
+                className="border-t border-[color-mix(in_oklab,var(--ink)_15%,transparent)] pt-6"
+              >
+                <span className="font-mono text-[11px] tracking-[0.28em] text-[var(--copper)]">
+                  {s.n}
+                </span>
+                <h3 className="mt-4 font-serif text-2xl tracking-[-0.01em]">{s.t}</h3>
+                <p className="mt-3 text-[15px] leading-relaxed text-[var(--pencil)]">{s.d}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-16">
+            <MagneticButton onClick={onStore}>Join as a store</MagneticButton>
+          </div>
+        </div>
+      </section>
+
+      {/* 12 — Footer CTA */}
       <footer className="mx-auto max-w-[1400px] px-6 py-28 sm:px-10 lg:py-36">
         <h2 className="max-w-3xl font-serif text-[3rem] leading-[0.98] tracking-[-0.03em] sm:text-[4rem]">
           Stop paying to find out.

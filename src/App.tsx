@@ -298,6 +298,7 @@ export default function App() {
           <Landing
             onCamera={() => setShooting(true)}
             onFile={scan}
+            onStore={() => setScreen('store')}
             scans={scans}
             onReopen={reopen}
             onForget={(id) => setScans(removeScan(id))}
