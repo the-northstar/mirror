@@ -541,6 +541,165 @@
   font-weight: 500;
 }
 
+/* The reading, read back --------------------------------------------------
+   Sits above the raw bars and masks: those are the evidence, this is what it
+   means. Set on the tinted ground so it reads as one block rather than as
+   more cards in the same stack. */
+.profile {
+  display: grid;
+  gap: 18px;
+  margin: 28px 0;
+  padding: 24px;
+  background: var(--paper-2);
+  border-radius: var(--radius);
+}
+
+/* Words beside the numbers they came from. Collapses on narrow screens, where
+   the chart follows the prose it explains rather than splitting it. */
+.profile-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .profile-top {
+    grid-template-columns: 1fr;
+  }
+}
+
+.profile-head {
+  display: grid;
+  gap: 8px;
+  max-width: 70ch;
+}
+
+/* Chart -------------------------------------------------------------------
+   Emphasis, not a ramp: bar length already carries magnitude, so colour is
+   free to mark the one reading that decided something. The recessive tone
+   clears 3:1 on the card so the quiet bars stay visible, and the pair
+   separates at ΔE 28 under protanopia. */
+.chart {
+  --chart-lead: var(--accent);
+  --chart-rest: #8a968f;
+  margin: 0;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.chart figcaption {
+  margin-bottom: 12px;
+}
+
+.chart svg {
+  display: block;
+  overflow: visible;
+}
+
+.chart-label {
+  font-size: 11.5px;
+  fill: var(--ink-2);
+}
+
+.chart-value {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink);
+}
+
+.chart-axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.profile-caveat {
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+
+.profile-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.profile-facts li {
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.profile-tips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+}
+
+.tip h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.tip p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* The citation is the point, so it is set apart rather than tucked away. */
+.tip-because {
+  margin-top: 10px !important;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--accent);
+}
+
+.profile-colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.rec-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.rec-list li {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+
+.rec-list strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.swatch-chip {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  margin-top: 2px;
+}
+
 /* Shopping for ---------------------------------------------------------- */
 .audience {
   border: 0;

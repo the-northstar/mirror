@@ -17,7 +17,18 @@ interface Reading {
   face: Record<string, any> | null
   palette: { season: string; undertone: string; depth: number; swatches: Array<{ name: string; hex: string }>; reason: string }
   formula: { finish: string; glowIntensity: number; coverageIntensity: number; because: string[] }
+  profile?: Profile
   partial: { concerns: boolean; face: boolean }
+}
+
+/** Her reading, read back to her. Every line traces to a measurement. */
+interface Profile {
+  summary: string
+  facts: Array<{ label: string; value: string; note: string; hex?: string }>
+  works: Array<{ name: string; hex: string; reason: string }>
+  watch: Array<{ name: string; hex: string; reason: string }>
+  tips: Array<{ title: string; body: string; because: string }>
+  caveat: string | null
 }
 
 interface RankedItem {
@@ -495,14 +506,6 @@ function Diagnosis({
   audience: ShoppingFor
   onAudience: (next: ShoppingFor) => void
 }) {
-  const ranked = [...reading.concerns]
-    .map((c) => ({ ...c, severity: 100 - c.raw_score }))
-    .sort((a, b) => b.severity - a.severity)
-    .slice(0, 5)
-  // On healthy skin every severity is tiny, so a fixed scale renders five
-  // empty bars. Scaling to the widest reading keeps the RANKING legible,
-  // which is what this panel is for; the printed score stays absolute.
-  const widest = Math.max(...ranked.map((c) => c.severity), 1)
   const masks = reading.concerns.filter((c) => c.mask_urls?.length).slice(0, 4)
 
   return (
@@ -609,28 +612,11 @@ function Diagnosis({
         </div>
       </section>
 
-      <div className="detail-grid">
-        {ranked.length > 0 && (
-          <section className="card">
-            <h3>Most pronounced</h3>
-            <p className="tiny">
-              YouCam scores 1-100, where higher is healthier. Ranked by how much
-              each shows on you.
-            </p>
-            <ul className="bars">
-              {ranked.map((c) => (
-                <li key={c.type}>
-                  <span>{CONCERN_LABEL[c.type] ?? c.type}</span>
-                  <span className="meter" aria-hidden>
-                    <span style={{ width: `${Math.max(4, (c.severity / widest) * 100)}%` }} />
-                  </span>
-                  <span className="num">{Math.round(c.raw_score)}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+      {reading.profile && (
+        <ProfileReport profile={reading.profile} concerns={reading.concerns} />
+      )}
 
+      <div className="detail-grid">
         {masks.length > 0 && (
           <section className="card">
             <h3>Where we saw it</h3>
@@ -650,6 +636,161 @@ function Diagnosis({
         )}
       </div>
     </main>
+  )
+}
+
+/**
+ * The seven skin readings, as bars.
+ *
+ * Horizontal bars rather than a radar: the job is comparing magnitude across
+ * named categories, and a radar distorts that into area while making the
+ * category order look meaningful when it is not. Length carries the magnitude,
+ * so colour is free to do the other job — EMPHASIS. The reading that drove the
+ * formula is in the accent; the rest recede, because a chart where every bar
+ * shouts equally buries the one that decided something.
+ *
+ * Plotted as SEVERITY, not as YouCam's health score, so longer always means
+ * more pronounced. A chart where the longest bar is the best news is a chart
+ * read backwards.
+ */
+function ConcernChart({ concerns }: { concerns: Reading['concerns'] }) {
+  const rows = [...concerns]
+    .filter((c) => typeof c.raw_score === 'number')
+    .map((c) => ({ label: CONCERN_LABEL[c.type] ?? c.type, sev: Math.round(100 - c.raw_score) }))
+    .sort((a, b) => b.sev - a.sev)
+  if (!rows.length) return null
+
+  const ROW = 30
+  const BAR = 14
+  const LABEL_W = 96
+  const VALUE_W = 34
+  const W = 320
+  const plotW = W - LABEL_W - VALUE_W
+  const H = rows.length * ROW
+  // Scaled to the widest reading, not to 100: real scores cluster high, so a
+  // fixed 0-100 axis draws seven near-empty bars and hides the ranking, which
+  // is the only thing this chart is for. The printed number stays absolute.
+  const widest = Math.max(...rows.map((r) => r.sev), 1)
+
+  return (
+    <figure className="chart">
+      <figcaption className="tiny">
+        Every reading, most pronounced first. Bars are scaled to your own
+        strongest reading; the number is the absolute severity out of 100.
+      </figcaption>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" width="100%" height={H}
+        aria-label={`Skin readings by severity: ${rows.map((r) => `${r.label} ${r.sev}`).join(', ')}`}>
+        {rows.map((r, i) => {
+          const y = i * ROW
+          const w = Math.max(2, (r.sev / widest) * plotW)
+          return (
+            <g key={r.label}>
+              <text x={0} y={y + BAR / 2 + 4} className="chart-label">{r.label}</text>
+              {/* 4px rounded data-end, square at the baseline. */}
+              <rect
+                x={LABEL_W} y={y} width={w} height={BAR} rx={4}
+                fill={i === 0 ? 'var(--chart-lead)' : 'var(--chart-rest)'}
+              />
+              <rect x={LABEL_W} y={y} width={Math.min(w, 4)} height={BAR}
+                fill={i === 0 ? 'var(--chart-lead)' : 'var(--chart-rest)'} />
+              <text x={LABEL_W + w + 8} y={y + BAR / 2 + 4} className="chart-value">{r.sev}</text>
+            </g>
+          )
+        })}
+        {/* Hairline baseline, solid and one shade off the surface. */}
+        <line x1={LABEL_W} y1={0} x2={LABEL_W} y2={H - (ROW - BAR)} className="chart-axis" />
+      </svg>
+    </figure>
+  )
+}
+
+/**
+ * The reading, read back to her, before anything is for sale.
+ *
+ * Deliberately sits above the raw bars and masks: those are the evidence, and
+ * this is what the evidence means. Every card carries the measurement that
+ * produced it, so the section reads as a report rather than as flattery.
+ */
+function ProfileReport({ profile, concerns }: { profile: Profile; concerns: Reading['concerns'] }) {
+  return (
+    <section className="profile">
+      {/* Words beside the numbers they came from, so a claim and its evidence
+          are read together rather than a scroll apart. */}
+      <div className="profile-top">
+        <div className="profile-head">
+          <p className="kicker">What your scan says about you</p>
+          <p className="lead">{profile.summary}</p>
+          {profile.caveat && <p className="tiny profile-caveat">{profile.caveat}</p>}
+        </div>
+        <ConcernChart concerns={concerns} />
+      </div>
+
+      {profile.facts.length > 0 && (
+        <ul className="profile-facts">
+          {profile.facts.map((f) => (
+            <li key={f.label}>
+              <span className="kicker">{f.label}</span>
+              <span className="stat">
+                {f.hex && <i className="dot" style={{ background: f.hex }} />}
+                {f.value}
+              </span>
+              <span className="tiny">{f.note}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {profile.tips.length > 0 && (
+        <div className="profile-tips">
+          {profile.tips.map((t) => (
+            <article key={t.title} className="card tip">
+              <h4>{t.title}</h4>
+              <p>{t.body}</p>
+              {/* The citation, not a footnote: it is why the tip is not generic. */}
+              <p className="tiny tip-because">{t.because}</p>
+            </article>
+          ))}
+        </div>
+      )}
+
+      <div className="profile-colors">
+        {profile.works.length > 0 && (
+          <section className="card">
+            <h3>Colours that work on you</h3>
+            <ul className="rec-list">
+              {profile.works.map((c) => (
+                <li key={c.name}>
+                  <i className="swatch-chip" style={{ background: c.hex }} />
+                  <span>
+                    <strong>{c.name}</strong>
+                    <span className="tiny">{c.reason}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Only rendered when a reading actually flagged something to watch —
+            an empty "avoid" list would invent a warning nobody measured. */}
+        {profile.watch.length > 0 && (
+          <section className="card">
+            <h3>Colours to be careful with</h3>
+            <ul className="rec-list">
+              {profile.watch.map((c) => (
+                <li key={c.name}>
+                  <i className="swatch-chip" style={{ background: c.hex }} />
+                  <span>
+                    <strong>{c.name}</strong>
+                    <span className="tiny">{c.reason}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+    </section>
   )
 }
 

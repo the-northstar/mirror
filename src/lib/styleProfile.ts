@@ -137,7 +137,19 @@ export function buildStyleProfile(
       'Redness is low relative to your other readings, which lets a golden undertone lead. Warm neutrals like camel and cream harmonise with it rather than fight it.',
     )
   } else {
-    recommended.push(COOL_FLATTERING[0], WARM_FLATTERING[0], CALMING[0])
+    // The same three swatches, re-reasoned for neutral colouring.
+    //
+    // Their stock reasons are written for the undertone that earned them, and
+    // borrowing them here made the list argue with itself: navy "complements
+    // pink-blue undertones" directly beside camel "echoes a golden undertone",
+    // and sage "calms flushed areas" on a shopper whose redness came back as
+    // the HEALTHIEST reading taken. Being neutral is why all three work — so
+    // that has to be what each one says.
+    recommended.push(
+      { ...COOL_FLATTERING[0], reason: 'A cool anchor. Your readings sit evenly enough to carry one without it draining you.' },
+      { ...WARM_FLATTERING[0], reason: 'The warm anchor, and the proof of the point: you can wear this and the navy equally well.' },
+      { ...CALMING[0], reason: 'A muted mid-tone that leans neither way, which is the safest ground for neutral colouring.' },
+    )
     rationale.push(
       hasRedness
         ? 'Your readings sit evenly, which puts you in neutral territory. That is the flexible one: both warm and cool anchors work, so we lead with versatile mid-tones.'

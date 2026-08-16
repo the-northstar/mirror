@@ -28,6 +28,7 @@ import {
 } from './src/lib/youcam'
 import { colorName, dominantColor } from './src/lib/color'
 import { formulaFor, paletteFor } from './src/lib/prescription'
+import { buildProfile } from './src/lib/profile'
 import { GARMENTS } from './src/lib/garments'
 import {
   addProducts,
@@ -310,15 +311,34 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
 
     const rows: ConcernOut[] = concerns.status === 'fulfilled' ? concerns.value : []
     const skinHex = tone.value.color.skin_color
+    const palette = paletteFor(skinHex)
+    const formula = formulaFor(rows)
+    const attrs = face.status === 'fulfilled' ? face.value : null
 
     return json({
       fileId,
       color: tone.value.color,
       faceQuality: tone.value.face_quality ?? null,
       concerns: rows,
-      face: face.status === 'fulfilled' ? face.value : null,
-      palette: paletteFor(skinHex),
-      formula: formulaFor(rows),
+      face: attrs,
+      palette,
+      formula,
+      // The reading read back to her. Built here rather than in the browser so
+      // the SDK gets it too, and so the wording stays testable as pure code
+      // rather than as JSX.
+      profile: buildProfile({
+        skinHex,
+        lipHex: tone.value.color.lip_color,
+        hairHex: tone.value.color.hair_color,
+        eyeHex: tone.value.color.eye_color,
+        eyeColorName: tone.value.color.eye_color_name,
+        hairColorName: tone.value.color.hair_color_name,
+        faceShape: (attrs as { faceshape?: string } | null)?.faceshape,
+        concerns: rows,
+        palette,
+        formula,
+        faceQuality: tone.value.face_quality ?? null,
+      }),
       // Say plainly which halves answered, rather than passing a partial
       // reading off as complete.
       partial: {
