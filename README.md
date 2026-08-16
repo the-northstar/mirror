@@ -118,4 +118,4 @@ API's error codes to plain-language guidance when a photo does not qualify.
 
 ## Licence
 
-MIT.
+MIT. See [LICENSE](LICENSE).

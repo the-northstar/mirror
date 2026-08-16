@@ -1526,6 +1526,8 @@
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+}
+
 /* A makeup swatch stands in for a thumbnail: the colour IS the product. */
 .thumb-swatch {
   display: block;
