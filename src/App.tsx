@@ -57,10 +57,12 @@ const AISLES = [
 ]
 
 /** Studio aisles render on the canvas instead of listing products. */
-const STUDIOS = [
-  { key: 'cloth', label: 'Clothes try-on' },
-  { key: 'hair', label: 'Hair try-on' },
-] as const
+/**
+ * Hair is the only aisle with nothing to sell: YouCam renders the cut, but no
+ * feed carries the product. Clothes is NOT here, because it has a real shelf
+ * and its try-on belongs inside that aisle rather than beside it.
+ */
+const STUDIOS = [{ key: 'hair', label: 'Hair' }] as const
 
 const CONCERN_LABEL: Record<string, string> = {
   oiliness: 'Oiliness', moisture: 'Moisture', redness: 'Redness', acne: 'Acne',
@@ -482,10 +484,9 @@ const AISLE_BLURB: Record<string, string> = {
   lipstick: 'Ranked against your palette',
   blush: 'Ranked against your palette',
   skincare: 'Aimed at what your scan flagged',
-  clothes: 'Colours that suit your undertone',
+  clothes: 'Try them on, and colours that suit your undertone',
   glasses: 'Frames for your measured face shape',
   jewellery: 'Metals for your undertone',
-  cloth: 'See garments on your own photo',
   hair: 'See cuts on your own photo',
 }
 
@@ -604,20 +605,20 @@ function ShopView({
         ))}
       </nav>
 
-      {(aisle === 'cloth' || aisle === 'hair') && (
+      {(aisle === 'clothes' || aisle === 'hair') && (
         <Studio
-          kind={aisle as 'cloth' | 'hair'}
+          kind={aisle === 'clothes' ? 'cloth' : 'hair'}
           fileId={reading.fileId}
           photo={photo}
           formulaNote={
-            aisle === 'cloth'
+            aisle === 'clothes'
               ? `Styles are ranked against your ${shop.palette.season} palette.`
               : undefined
           }
         />
       )}
 
-      {aisle !== 'cloth' && aisle !== 'hair' && (
+      {aisle !== 'hair' && (
         <>
       <p className="aisle-note">
         {aisle === 'foundation' || aisle === 'lipstick' ? (
