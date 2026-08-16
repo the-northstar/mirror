@@ -198,7 +198,15 @@ export const analyzeTone = (srcFileId: string, signal?: AbortSignal) =>
 export const analyzeConcerns = (srcFileId: string, signal?: AbortSignal) =>
   runTask<{ output: ConcernOut[] }>(
     'skin-analysis',
-    { src_file_id: srcFileId, dst_actions: SD_CONCERNS, format: 'json' },
+    {
+      src_file_id: srcFileId,
+      dst_actions: SD_CONCERNS,
+      format: 'json',
+      // Same relaxation as the tone read: strictness defaults to `high`, which
+      // rejects a head tilted more than ~10 degrees. A slightly tilted selfie
+      // costs less precision than no reading at all.
+      face_angle_strictness_level: 'flexible',
+    },
     { signal },
   ).then((r) => r.output)
 
@@ -212,7 +220,11 @@ export const analyzeConcerns = (srcFileId: string, signal?: AbortSignal) =>
 export const analyzeFace = (srcFileId: string, signal?: AbortSignal) =>
   runTask<Record<string, unknown>>(
     'face-attr-analysis',
-    { src_file_id: srcFileId, features: ['faceShape', 'age', 'gender'] },
+    {
+      src_file_id: srcFileId,
+      features: ['faceShape', 'age', 'gender'],
+      face_angle_strictness_level: 'flexible',
+    },
     { signal },
   )
 
@@ -309,6 +321,39 @@ export const tryOnClothTemplate = (
     { signal },
   ).then((r) => r.url)
 
+/**
+ * Skincare try-on: what her skin could look like once a concern improves.
+ *
+ * This is the honest analogue of a makeup render for skincare. A serum has no
+ * visible application, but the OUTCOME is exactly what a shopper is buying,
+ * and the intensities are the concerns her own scan flagged.
+ *
+ * Concern keys sit at the top level, 0.0 to 1.0. At least one must be non-zero
+ * or the API rejects the request.
+ */
+export const simulateSkin = (
+  srcFileId: string,
+  intensities: Record<string, number>,
+  signal?: AbortSignal,
+) =>
+  runTask<{ url: string }>(
+    'skin-simulation',
+    { src_file_id: srcFileId, ...intensities },
+    { signal },
+  ).then((r) => r.url)
+
+/** What skin-simulation accepts. Note dark_circle, not dark_circle_v2. */
+export const SIMULATION_CONCERNS: Record<string, string> = {
+  wrinkle: 'wrinkle',
+  pore: 'pore',
+  texture: 'texture',
+  redness: 'redness',
+  acne: 'acne',
+  oiliness: 'oiliness',
+  age_spot: 'age_spot',
+  dark_circle_v2: 'dark_circle',
+}
+
 export interface HairTemplate {
   id: string
   thumb: string
@@ -355,7 +400,32 @@ const SHOPPER_OWNED: Record<string, string> = {
   error_exceed_max_image_size:
     'That photo is too large for try-on. Use a smaller one, or retake it.',
   error_nsfw_content_detected: 'That image was rejected by content safety checks.',
+  // Face-angle rejections. Not in the published error list, but the live API
+  // returns them and they use the same vocabulary as face_quality.faceangle.
+  // Every one of these is fixed by retaking the photo, so they are the
+  // shopper's, and landing in the shop-owned bucket told her nothing.
+  error_face_angle_right_tilt:
+    'Your head is tilted right. Level it and look straight at the camera.',
+  error_face_angle_left_tilt:
+    'Your head is tilted left. Level it and look straight at the camera.',
+  error_face_angle_up: 'Your chin is raised. Look straight at the camera.',
+  error_face_angle_down: 'Your chin is down. Look straight at the camera.',
+  error_face_not_forward_facing:
+    'Turn to face the camera straight on, not at an angle.',
+  error_face_angle_too_large:
+    'Your face is turned too far. Look straight at the camera.',
+  error_src_face_too_large:
+    'You are too close. Move back so your whole face fits the frame.',
+  error_face_parsing:
+    'We could not read that face clearly. Try a sharper, front-facing photo.',
 }
+
+/**
+ * Any face-angle rejection is the shopper's to fix by retaking, so a code we
+ * have not seen before is still better guidance than "our side".
+ */
+const isFramingCode = (code: string) =>
+  /face_angle|face_pose|not_forward|tilt/.test(code)
 
 export function faultOf(code: string): {
   owner: 'shopper' | 'shop'
@@ -363,6 +433,13 @@ export function faultOf(code: string): {
 } {
   const shopper = SHOPPER_OWNED[code]
   if (shopper) return { owner: 'shopper', message: shopper }
+
+  if (isFramingCode(code)) {
+    return {
+      owner: 'shopper',
+      message: 'Face the camera straight on, head level, and try again.',
+    }
+  }
 
   // Uploads expire. The task then fails with an opaque internal error, which
   // is the shop's fault to recover from but the shopper's to act on: her photo

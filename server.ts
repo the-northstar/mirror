@@ -15,6 +15,8 @@ import {
   clothTemplates,
   hairTemplates,
   tryOnClothTemplate,
+  simulateSkin,
+  SIMULATION_CONCERNS,
   tryOnCloth,
   tryOnHair,
   tryOnMakeup,
@@ -302,6 +304,40 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       return json({ error: 'No makeup effects supplied.' }, 400)
     }
     const url = await tryOnMakeup(fileId, effects as never, req.signal)
+    return json({ url })
+  },
+
+  /**
+   * Skincare try-on: her own scan drives which concerns improve, so the render
+   * answers "what would this fix on me" rather than showing a stock before-and-
+   * after.
+   */
+  'POST /api/tryon/skincare': async (req) => {
+    const { fileId, treats, concerns = [] } = (await req.json()) as {
+      fileId?: string
+      treats?: string[]
+      concerns?: ConcernOut[]
+    }
+    if (!fileId) return json({ error: 'Missing photo.' }, 400)
+
+    const intensities: Record<string, number> = {}
+    for (const concern of treats ?? []) {
+      const key = SIMULATION_CONCERNS[concern]
+      if (!key) continue
+      const row = concerns.find((c) => c.type === concern)
+      // Improve in proportion to how pronounced it actually is, so a product
+      // aimed at something she does not have barely moves the picture.
+      const severity = row ? (100 - row.raw_score) / 100 : 0.5
+      intensities[key] = Math.max(0.35, Math.min(1, severity * 1.6))
+    }
+    if (Object.keys(intensities).length === 0) {
+      return json(
+        { error: 'This product does not target anything your scan measured.' },
+        400,
+      )
+    }
+
+    const url = await simulateSkin(fileId, intensities, req.signal)
     return json({ url })
   },
 

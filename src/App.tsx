@@ -22,6 +22,7 @@ interface Reading {
 
 interface RankedItem {
   id: string
+  tags?: string[]
   aisle: string
   brand: string
   name: string
@@ -69,7 +70,7 @@ const AISLES = [
 
 /** Aisles YouCam can render, and the makeup subset that shares one payload. */
 const MAKEUP_AISLES = ['foundation', 'lipstick', 'blush']
-const RENDERABLE = [...MAKEUP_AISLES, 'clothes', 'hair']
+const RENDERABLE = [...MAKEUP_AISLES, 'clothes', 'hair', 'skincare']
 
 const CONCERN_LABEL: Record<string, string> = {
   oiliness: 'Oiliness', moisture: 'Moisture', redness: 'Redness', acne: 'Acne',
@@ -229,7 +230,7 @@ export default function App() {
       <header className={screen === 'land' ? 'bar bar-land' : 'bar'}>
         <button
           className="brand"
-          onClick={() => setScreen(reading ? 'diagnosis' : 'land')}
+          onClick={() => setScreen('land')}
           aria-label="Mirror, back to start"
         >
           <span className="brand-mark" aria-hidden />
@@ -679,11 +680,13 @@ function ShopView({
           </>
         ) : aisle === 'clothes' ? (
           <>Try any of these on your own photo.</>
-        ) : (
+        ) : aisle === 'skincare' ? (
           <>
-            Skincare has nothing to render: a serum has no visible application,
-            so these are ranked by what your scan flagged instead.
+            Try-on simulates the result: your own scan sets how much each
+            concern improves.
           </>
+        ) : (
+          <>Rendered on your own photo.</>
         )}
       </p>
 
@@ -770,6 +773,7 @@ function ProductCard({
               fileId={reading.fileId}
               effects={makeupEffects}
               product={product}
+              concerns={reading.concerns}
             />
           )}
         </div>
@@ -792,10 +796,12 @@ function TryOnButton({
   fileId,
   effects,
   product,
+  concerns = [],
 }: {
   fileId: string
   effects: unknown[]
   product: RankedItem
+  concerns?: Reading['concerns']
 }) {
   const [url, setUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -807,6 +813,7 @@ function TryOnButton({
     try {
       const isGarment = product.aisle === 'clothes'
       const isHair = product.aisle === 'hair'
+      const isSkincare = product.aisle === 'skincare'
       const isMakeup = MAKEUP_AISLES.includes(product.aisle)
 
       let res: Response
@@ -816,6 +823,18 @@ function TryOnButton({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileId, templateId: product.id }),
+        })
+      } else if (isSkincare) {
+        // Shows the outcome the product is sold on, scaled by how pronounced
+        // each concern actually is on her.
+        res = await fetch('/api/tryon/skincare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileId,
+            treats: product.tags ?? [],
+            concerns,
+          }),
         })
       } else if (isGarment) {
         // The server resolves the image by id, so the browser never chooses
