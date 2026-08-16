@@ -17,7 +17,13 @@ import {
   useAuth,
   useUser,
 } from '@clerk/clerk-react'
-import { AISLES, COLUMNS, type Finance, type OwnerProduct } from './lib/products'
+import {
+  AISLES,
+  COLUMNS,
+  GARMENT_CATEGORIES,
+  type Finance,
+  type OwnerProduct,
+} from './lib/products'
 import type { Order } from './lib/catalogue'
 import { CLERK_KEY } from './lib/clerk'
 
@@ -26,8 +32,11 @@ type Row = {
   brand: string
   aisle: string
   hex: string
-  image: string
   price: string
+  garmentCategory: string
+  /** The chosen file, and a blob URL for the preview. */
+  photo: File | null
+  preview: string
 }
 
 const BLANK: Row = {
@@ -35,8 +44,10 @@ const BLANK: Row = {
   brand: '',
   aisle: 'clothes',
   hex: '#2f5d62',
-  image: '',
   price: '',
+  garmentCategory: 'auto',
+  photo: null,
+  preview: '',
 }
 
 type Listed = Omit<OwnerProduct, 'ownerId'> & { mine?: boolean }
@@ -125,11 +136,13 @@ function Owner() {
       // writes would read-modify-write over each other.
       for (const [i, row] of rows.entries()) {
         try {
-          await call('/api/products', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(row),
-          })
+          const form = new FormData()
+          for (const [k, v] of Object.entries(row)) {
+            if (k === 'photo' || k === 'preview' || typeof v !== 'string') continue
+            form.append(k, v)
+          }
+          if (row.photo) form.append('photo', row.photo)
+          await call('/api/products', { method: 'POST', body: form })
         } catch (err) {
           errors[i] = (err as Error).message
         }
@@ -279,6 +292,26 @@ function Owner() {
                 </select>
               </label>
 
+              {row.aisle === 'clothes' && (
+                <label>
+                  Worn as
+                  <select
+                    value={row.garmentCategory}
+                    onChange={(e) => set(i, 'garmentCategory', e.target.value)}
+                  >
+                    {GARMENT_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c.replace('_', ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="tiny">
+                    Guessed from the photo unless you say. A dress set to a top
+                    renders as a top.
+                  </span>
+                </label>
+              )}
+
               <label>
                 Price
                 <input
@@ -290,20 +323,26 @@ function Owner() {
                   placeholder="89"
                 />
               </label>
-
               <label className="span-2">
-                Image URL
+                Photo
                 <input
-                  type="url"
-                  value={row.image}
-                  onChange={(e) => set(i, 'image', e.target.value)}
-                  placeholder="https://cdn.yourshop.com/overshirt.png"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
                   required
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null
+                    if (row.preview) URL.revokeObjectURL(row.preview)
+                    set(i, 'photo', f)
+                    set(i, 'preview', f ? URL.createObjectURL(f) : '')
+                  }}
                 />
                 <span className="tiny">
-                  Public https link. Try-on fetches it from YouCam's servers, so
-                  it cannot be a local file.
+                  A flat-lay on white renders best. Uploaded here, then served
+                  from this site so YouCam can fetch it.
                 </span>
+                {row.preview && (
+                  <img className="photo-preview" src={row.preview} alt="" />
+                )}
               </label>
 
               <label className="span-2">

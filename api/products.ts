@@ -9,7 +9,8 @@
  * Ownership comes from the Clerk session token, never from the request body,
  * so an owner can only ever touch their own rows.
  */
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { verifyToken } from '@clerk/backend'
 import readXlsx from 'read-excel-file/node'
 import {
@@ -24,6 +25,7 @@ import {
   summariseOrders,
   parseCsv,
   rowsToProducts,
+  productId,
   type OwnerProduct,
 } from '../src/lib/products.ts'
 
@@ -31,6 +33,13 @@ import {
 // processes write at once or the catalogue outgrows one file read.
 const STORE = 'products.json'
 const ORDERS = 'orders.json'
+const UPLOADS = 'uploads'
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024
+const PHOTO_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
 const MAX_SHEET_BYTES = 5 * 1024 * 1024
 
 export const config = { runtime: 'nodejs', maxDuration: 60 }
@@ -74,6 +83,24 @@ export async function restoreOrdersFromDisk(): Promise<void> {
 
 export async function persistOrders(): Promise<void> {
   await writeFile(ORDERS, JSON.stringify(allOrders(), null, 2))
+}
+
+/**
+ * Save an uploaded product photo and return the path it is served at.
+ *
+ * Named after the product, so re-uploading replaces the old photo instead of
+ * littering the disk with orphans. The extension comes from the sniffed type,
+ * never from the client's filename, which is what keeps `../` out of the path.
+ */
+async function savePhoto(file: File, id: string): Promise<string> {
+  const ext = PHOTO_TYPES[file.type]
+  if (!ext) throw new HttpError('Photo must be a JPEG, PNG or WebP.', 400)
+  if (file.size > MAX_PHOTO_BYTES) throw new HttpError('Photo is over 10MB.', 400)
+
+  await mkdir(UPLOADS, { recursive: true })
+  const name = `${id}.${ext}`
+  await writeFile(join(UPLOADS, name), Buffer.from(await file.arrayBuffer()))
+  return `/uploads/${name}`
 }
 
 /** The owner's own store id, derived from the token — never from the client. */
@@ -170,7 +197,24 @@ export default async function handler(req: Request): Promise<Response> {
 
     if (req.method === 'POST') {
       const ownerId = await ownerOf(req)
-      const product = normalizeProduct(await req.json().catch(() => null), ownerId)
+
+      // The form posts a photo, so it arrives as multipart; JSON is still
+      // accepted for anything scripting against this.
+      let input: Record<string, unknown>
+      if (req.headers.get('content-type')?.includes('multipart/form-data')) {
+        const form = await req.formData()
+        input = Object.fromEntries(
+          [...form.entries()].filter(([, v]) => typeof v === 'string'),
+        )
+        const photo = form.get('photo')
+        if (photo instanceof File && photo.size > 0) {
+          input.image = await savePhoto(photo, productId(String(input.name ?? ''), ownerId))
+        }
+      } else {
+        input = (await req.json().catch(() => null)) as Record<string, unknown>
+      }
+
+      const product = normalizeProduct(input, ownerId)
       await save([product])
       return Response.json({ product })
     }

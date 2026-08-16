@@ -31,9 +31,17 @@ export const AISLES: Product['aisle'][] = [
 ]
 
 /** Spreadsheet columns, in the order the template writes them. */
-export const COLUMNS = ['name', 'brand', 'aisle', 'hex', 'image', 'price', 'url'] as const
+export const COLUMNS = [
+  'name', 'brand', 'aisle', 'hex', 'image', 'price', 'url', 'garmentCategory',
+] as const
+
+/** What YouCam renders a garment as. 'auto' lets it guess from the photo. */
+export const GARMENT_CATEGORIES = [
+  'auto', 'upper_body', 'lower_body', 'full_body', 'outer', 'shoes',
+] as const
 
 export interface ProductInput {
+  garmentCategory?: unknown
   name?: unknown
   brand?: unknown
   aisle?: unknown
@@ -49,6 +57,10 @@ export interface ProductInput {
  * Runs server-side as well as in the form: the API route is a trust boundary
  * and the browser's copy of these rules proves nothing.
  */
+/** The product's id, needed before normalising to name an uploaded file. */
+export const productId = (name: string, ownerId: string) =>
+  `own-${ownerId.slice(-8)}-${slug(name.trim())}`
+
 export function normalizeProduct(input: unknown, ownerId: string): OwnerProduct {
   const p = (input ?? {}) as ProductInput
   const name = str(p.name)
@@ -57,6 +69,7 @@ export function normalizeProduct(input: unknown, ownerId: string): OwnerProduct 
   const image = str(p.image)
   const url = str(p.url)
   const aisle = (str(p.aisle) || 'clothes') as Product['aisle']
+  const garmentCategory = str(p.garmentCategory) || 'auto'
 
   if (!name) throw new Error('Give the product a name.')
   if (name.length > 80) throw new Error('Name is too long (80 characters max).')
@@ -68,9 +81,11 @@ export function normalizeProduct(input: unknown, ownerId: string): OwnerProduct 
   if (!/^#[0-9a-f]{6}$/.test(hex)) {
     throw new Error('Colour must be a 6-digit hex like #2f5d62.')
   }
-  // Try-on fetches this URL from YouCam's own servers, so it has to be public.
-  if (!/^https:\/\/[^\s"']+$/i.test(image)) {
-    throw new Error('Image must be a public https:// URL.')
+  // Try-on fetches the image from YouCam's own servers, so it has to be
+  // reachable: either a public https URL, or one of our own uploads, which the
+  // try-on route resolves against PUBLIC_BASE_URL before handing it over.
+  if (!/^https:\/\/[^\s"']+$/i.test(image) && !/^\/uploads\/[\w.-]+$/.test(image)) {
+    throw new Error('Add a photo, or paste a public https:// image URL.')
   }
   if (url && !/^https:\/\/[^\s"']+$/i.test(url)) {
     throw new Error('Product link must be a public https:// URL.')
@@ -84,7 +99,7 @@ export function normalizeProduct(input: unknown, ownerId: string): OwnerProduct 
   return {
     // Owner-scoped id: re-adding the same name updates rather than duplicating,
     // and one owner can never collide with another's product.
-    id: `own-${ownerId.slice(-8)}-${slug(name)}`,
+    id: productId(name, ownerId),
     // Orders group by store and skip rows without one, so the owner is the
     // store: without this their products are visible but never orderable.
     storeId: `own-${ownerId.slice(-8)}`,
@@ -95,6 +110,7 @@ export function normalizeProduct(input: unknown, ownerId: string): OwnerProduct 
     colorName: colorName(hex),
     image,
     ...(url ? { url } : {}),
+    ...(aisle === 'clothes' ? { garmentCategory } : {}),
     ...(price !== undefined ? { price } : {}),
     ownerId,
   }

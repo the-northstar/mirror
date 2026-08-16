@@ -113,3 +113,26 @@ test('the books roll up per product, best seller first', () => {
 test('no orders is zero, not a crash or a NaN', () => {
   expect(summariseOrders([])).toEqual({ revenue: 0, orders: 0, units: 0, byProduct: [] })
 })
+
+test('an uploaded photo path is as valid as a public URL', () => {
+  const base = { name: 'Tee', hex: '#2f5d62' }
+  expect(normalizeProduct({ ...base, image: '/uploads/own-abc-tee.jpg' }, 'u').image).toBe(
+    '/uploads/own-abc-tee.jpg',
+  )
+  // Anything else pointing at our disk is still refused.
+  expect(() => normalizeProduct({ ...base, image: '/uploads/../.env' }, 'u')).toThrow()
+  expect(() => normalizeProduct({ ...base, image: '/etc/passwd' }, 'u')).toThrow()
+})
+
+test('clothes carry a render category so a dress is not rendered as a shirt', () => {
+  const p = normalizeProduct(
+    { name: 'Dress', hex: '#2f5d62', image: 'https://a.test/d.png', aisle: 'clothes', garmentCategory: 'full_body' },
+    'u',
+  )
+  expect(p.garmentCategory).toBe('full_body')
+  // Non-clothes aisles have nothing to render, so they carry none.
+  expect(
+    normalizeProduct({ name: 'Balm', hex: '#2f5d62', image: 'https://a.test/b.png', aisle: 'lipstick' }, 'u')
+      .garmentCategory,
+  ).toBeUndefined()
+})

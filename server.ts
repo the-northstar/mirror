@@ -269,7 +269,13 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     const product = fromOwner ?? fromStore ?? fromShelf
     const legacy = GARMENTS.find((g) => g.id === garmentId)
 
-    const imageUrl = product?.image ?? (legacy ? absolute(legacy.url, req) : null)
+    // An uploaded photo is a path on our own origin; YouCam fetches from its
+    // servers, so it has to go out absolute.
+    const imageUrl = product?.image
+      ? absolute(product.image, req)
+      : legacy
+        ? absolute(legacy.url, req)
+        : null
     if (!imageUrl) return json({ error: 'Unknown garment.' }, 400)
 
     const url = await tryOnCloth(
@@ -544,6 +550,20 @@ Bun.serve({
     // Renders are served from here, not from Vite's public dir: Vite's static
     // middleware does not notice a just-written file and answers index.html,
     // which makes every first try-on look broken.
+    // Store-owner product photos. Served from disk, not from dist, so a photo
+    // uploaded a second ago is visible without a rebuild.
+    if (url.pathname.startsWith('/uploads/')) {
+      // Only ever the flat filenames savePhoto writes. Traversal happens to
+      // miss today because Bun leaves the pathname encoded, which is luck, not
+      // a policy — so the name is checked rather than trusted.
+      const name = url.pathname.slice('/uploads/'.length)
+      if (!/^[\w.-]+$/.test(name) || name.includes('..')) {
+        return new Response('Not found', { status: 404 })
+      }
+      const f = Bun.file(join('uploads', name))
+      return (await f.exists()) ? new Response(f) : new Response('Not found', { status: 404 })
+    }
+
     if (url.pathname.startsWith('/generated/')) {
       const f = Bun.file(join('renders', url.pathname.slice('/generated/'.length)))
       return (await f.exists()) ? new Response(f) : new Response('Not found', { status: 404 })

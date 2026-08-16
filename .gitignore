@@ -42,3 +42,6 @@ android/app/src/main/assets/public
 
 # Store order ledger (file-backed).
 orders.json
+
+# Store product photos (file-backed).
+uploads/
