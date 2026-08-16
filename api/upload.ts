@@ -49,6 +49,15 @@ export default async function handler(req: Request): Promise<Response> {
     if (message.includes('YOUCAM_API_KEY')) {
       return Response.json({ error: message }, { status: 502 })
     }
+    if (message.includes('CreditInsufficiency') || message.includes('enough credits')) {
+      return Response.json(
+        {
+          error:
+            'Your YouCam account is out of API credits. Top up or redeem your hackathon units at the API console.',
+        },
+        { status: 502 },
+      )
+    }
     return Response.json(
       { error: 'Could not upload that photo. Please try another.' },
       { status: 502 },

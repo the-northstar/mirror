@@ -6,6 +6,7 @@ import {
   type StyleProfile,
 } from './lib/styleProfile'
 import { GARMENTS, rankGarments, type Garment } from './lib/garments'
+import { Camera } from './Camera'
 import './App.css'
 
 type Tab = 'scan' | 'report' | 'try'
@@ -126,6 +127,7 @@ function Scan({
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [shooting, setShooting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -147,6 +149,19 @@ function Scan({
   }
 
   if (busy) return <Working caption="Reading your skin" />
+
+  if (shooting) {
+    return (
+      <Camera
+        mode="face"
+        onCancel={() => setShooting(false)}
+        onCapture={(file) => {
+          setShooting(false)
+          run(file)
+        }}
+      />
+    )
+  }
 
   return (
     <main className="pad stack">
@@ -192,8 +207,11 @@ function Scan({
           e.target.value = ''
         }}
       />
-      <button className="btn" onClick={() => inputRef.current?.click()}>
-        {session ? 'Scan again' : 'Take a selfie'}
+      <button className="btn" onClick={() => setShooting(true)}>
+        {session ? 'Scan again' : 'Open camera'}
+      </button>
+      <button className="btn btn-quiet" onClick={() => inputRef.current?.click()}>
+        Upload a photo instead
       </button>
 
       <ul className="guides">
@@ -354,6 +372,7 @@ function BodyPrompt({
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [shooting, setShooting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const upload = async (file: File) => {
@@ -374,6 +393,19 @@ function BodyPrompt({
   }
 
   if (busy) return <Working caption="Uploading your photo" />
+
+  if (shooting) {
+    return (
+      <Camera
+        mode="body"
+        onCancel={() => setShooting(false)}
+        onCapture={(file) => {
+          setShooting(false)
+          upload(file)
+        }}
+      />
+    )
+  }
 
   return (
     <main className="pad stack">
@@ -402,8 +434,11 @@ function BodyPrompt({
           e.target.value = ''
         }}
       />
-      <button className="btn" onClick={() => inputRef.current?.click()}>
-        Add a full-length photo
+      <button className="btn" onClick={() => setShooting(true)}>
+        Open camera
+      </button>
+      <button className="btn btn-quiet" onClick={() => inputRef.current?.click()}>
+        Upload a photo instead
       </button>
       <ul className="guides">
         <li>Standing, whole body in frame</li>

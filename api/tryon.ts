@@ -61,6 +61,10 @@ function friendly(message: string): string {
   if (message.includes('not recognized') || message.includes('InvalidApiKey')) {
     return 'The YouCam API key was rejected. Check YOUCAM_API_KEY in your .env.'
   }
+  // Account-level problems are not the user's photo; say so plainly.
+  if (message.includes('CreditInsufficiency') || message.includes('enough credits')) {
+    return 'Your YouCam account is out of API credits. Top up or redeem your hackathon units at the API console.'
+  }
   if (message.includes('error_pose')) return 'Stand facing the camera, full body in frame, and try again.'
   if (message.includes('error_invalid_src')) return 'That photo will not work for try-on. Use a clear, full-length shot.'
   if (message.includes('error_invalid_ref')) return 'This garment image could not be processed.'

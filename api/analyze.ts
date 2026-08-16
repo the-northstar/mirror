@@ -65,6 +65,10 @@ function friendly(message: string): string {
   if (message.includes('not recognized') || message.includes('InvalidApiKey')) {
     return 'The YouCam API key was rejected. Check YOUCAM_API_KEY in your .env.'
   }
+  // Account-level problems are not the user's photo; say so plainly.
+  if (message.includes('CreditInsufficiency') || message.includes('enough credits')) {
+    return 'Your YouCam account is out of API credits. Top up or redeem your hackathon units at the API console.'
+  }
   if (message.includes('error_no_face')) return 'We could not find a face in that photo. Try a clear, front-facing selfie.'
   if (message.includes('face_too_small')) return 'Move closer to the camera. Your face needs to fill more of the frame.'
   if (message.includes('lighting_dark')) return 'That photo is too dark. Try again in brighter, even light.'
