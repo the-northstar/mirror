@@ -154,6 +154,9 @@ export default function App() {
         body: JSON.stringify({
           skinHex: reading.color.skin_color,
           lipHex: reading.color.lip_color,
+          // Blush leads the palette rather than the face: a blush the colour
+          // of her skin would disappear.
+          blushHex: reading.palette.swatches[0]?.hex,
           concerns: reading.concerns,
           faceShape: reading.face?.faceshape,
           gender: reading.face?.agegender?.gender,
@@ -672,7 +675,10 @@ function ProductCard({
   reading: Reading
   makeupEffects: unknown[]
 }) {
-  const canTryOn = product.aisle === 'foundation' || product.aisle === 'lipstick'
+  // What YouCam can actually paint on a face. Clothes and hair render in the
+  // Studio instead, where the whole photo is the canvas.
+  const MAKEUP_AISLES = ['foundation', 'lipstick', 'blush']
+  const canTryOn = MAKEUP_AISLES.includes(product.aisle)
 
   return (
     <article className={featured ? 'product featured' : 'product'}>

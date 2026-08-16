@@ -41,6 +41,7 @@ export function effectsFor(
   formula: Formula,
   skinHex: string,
   lipHex?: string,
+  blushHex?: string,
 ): MakeupEffect[] {
   const effects: MakeupEffect[] = [
     {
@@ -70,6 +71,22 @@ export function effectsFor(
           // reads as one prescription rather than two unrelated products.
           texture: formula.finish === 'matte' ? 'matte' : formula.finish === 'dewy' ? 'gloss' : 'satin',
           colorIntensity: 75,
+        },
+      ],
+    })
+  }
+
+  if (blushHex) {
+    effects.push({
+      category: 'blush',
+      // Unlike foundation, blush is placed rather than segmented, so it needs
+      // a pattern from YouCam's own catalogue and a texture.
+      pattern: { name: '1color1' },
+      palettes: [
+        {
+          color: blushHex,
+          texture: formula.finish === 'matte' ? 'matte' : 'shimmer',
+          colorIntensity: 55,
         },
       ],
     })
