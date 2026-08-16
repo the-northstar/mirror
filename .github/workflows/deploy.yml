@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # The deploy is gated on the same checks that run locally, so a broken
+  # main never reaches the container: Coolify builds whatever it is told to.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun test
+      - run: bun run build
+
+  deploy:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      # Coolify pulls the commit itself, so this only has to trigger it.
+      - name: Trigger Coolify deploy
+        run: |
+          code=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            "https://deploy.pykero.com/api/v1/deploy?uuid=${{ vars.COOLIFY_APP_UUID || '0tow6b0vl28lp4fbwapi0z55' }}")
+          cat response.json
+          echo
+          # curl exits 0 on a 4xx/5xx body, so the status is checked by hand.
+          if [ "$code" -ge 300 ]; then
+            echo "::error::Coolify returned HTTP $code"
+            exit 1
+          fi
