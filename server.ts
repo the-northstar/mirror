@@ -14,7 +14,6 @@ import {
   faultOf,
   clothTemplates,
   hairTemplates,
-  lookTemplates,
   tryOnLook,
   tryOnClothTemplate,
   simulateSkin,
@@ -53,14 +52,25 @@ import {
 } from './src/lib/catalogue'
 import { detectKind, fetchFeed, type FeedKind } from './src/lib/feed'
 import {
-  rankByPalette,
+  rankBlush,
+  rankClothes,
   rankFoundation,
+  rankHair,
+  rankLipstick,
   rankSkincare,
   JUDGE_SLICE,
   type Ranked,
+  type Shopper,
 } from './src/lib/rank'
+import {
+  audienceOfCategory,
+  gatedAisles,
+  groupByAudience,
+  shoppingFor,
+  suitsAudience,
+} from './src/lib/audience'
 import { localFor } from './src/lib/localCatalogue'
-import { judge } from './src/lib/judge'
+import { judge, topMatches } from './src/lib/judge'
 import { effectsFor, explainEffects, concealerFrom } from './src/lib/makeup'
 import productsRoute, {
   ownedProducts,
@@ -463,13 +473,16 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
    * YouCam units.
    */
   'POST /api/shop': async (req) => {
-    const { skinHex, lipHex, concerns = [], faceShape, gender, storeId } = (await req.json()) as {
+    const {
+      skinHex, lipHex, concerns = [], faceShape, gender, audience, storeId,
+    } = (await req.json()) as {
       storeId?: string
       skinHex?: string
       lipHex?: string
       concerns?: ConcernOut[]
       faceShape?: string
       gender?: string
+      audience?: string
     }
     if (!skinHex || !/^#[0-9a-f]{6}$/i.test(skinHex)) {
       return json({ error: 'Missing skin colour from the scan.' }, 400)
@@ -510,8 +523,14 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     // The SDK is the exception: embedded on a retailer's own site, it must
     // recommend only what that retailer actually sells, so neither the public
     // feeds nor the committed CSV catalogue may leak into it.
+    // Who the shopper says they are shopping for. Detection prefills the
+    // control in the UI, but this is the shopper's own answer by the time it
+    // reaches here, which is why it may FILTER: a wrong guess we made is a
+    // different thing from a choice they made.
+    const shopFor = shoppingFor(audience, gender)
+
     const withStore = (aisle: Aisle, rows: Product[]) =>
-      storeId
+      (storeId
         ? productsForStore(storeId).filter((p) => p.aisle === aisle)
         : [
             ...rows,
@@ -520,10 +539,18 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
             ...localFor(aisle),
             ...productsForAisle(aisle),
           ]
+      ).filter((p) => suitsAudience(p, shopFor))
 
     // Hair templates are YouCam's own catalogue, shaped as products so the
-    // aisle behaves like the others. Ordered by the detected gender when we
-    // have one, never filtered by it.
+    // aisle behaves like the others.
+    //
+    // Their audience needs no inferring: YouCam files every style under a
+    // literal "Male" or "Female" category, so this aisle is labelled as exactly
+    // as the clothes feeds are and takes the same filter. A cut is the one
+    // recommendation a shopper wears on their head in every photo for two
+    // months, so a shelf that interleaves the two is the worst place to make
+    // them scroll past styles they did not come for.
+    //
     // The whole catalogue, not the first page: one page is 20 styles split by
     // category, which left the aisle showing a handful.
     const hair = await allTemplates(hairTemplates)
@@ -534,57 +561,63 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
             aisle: 'hair' as never,
             brand: h.category_name,
             name: h.title,
+            audience: audienceOfCategory(h.category_name),
             hex: '#e8e4dd',
             colorName: 'neutral',
             image: h.thumb,
+            // Both replaced by rankHair below, which is the only thing that
+            // knows the measured face shape.
             score: 0,
-            reason: `A ${h.category_name.toLowerCase()} cut from YouCam's own style catalogue.`,
+            reason: '',
           }),
         ),
       )
-      .catch(() => [])
+      .catch((): Ranked[] => [])
 
-    const looks = await lookTemplates(20)
-      .then(({ templates }) =>
-        templates.map(
-          (l): Ranked => ({
-            id: l.id,
-            aisle: 'look' as never,
-            brand: l.category_name,
-            name: l.title,
-            hex: '#e8e4dd',
-            colorName: 'neutral',
-            image: l.thumb,
-            score: 0,
-            reason: `A complete ${l.category_name.toLowerCase()} look from YouCam's artist catalogue.`,
-          }),
-        ),
-      )
-      .catch(() => [])
+    // The "full looks" aisle is gone. On this key the look-vto template
+    // catalogue is 240 entries in two categories — Animals and Sports — and
+    // both are novelty face paint: leopard muzzles, national flags. None of it
+    // is a product a shopper buys, none of it was ranked (every entry carried
+    // a placeholder colour and a score of 0), and a whiskered cat face under a
+    // "Closest match #2" ribbon claimed a measurement nobody made. Nothing was
+    // being recommended, so there was nothing to keep. `tryOnLook` and its
+    // route stay: the capability is fine, it is the shelf that was not.
+    //
+    // One reading, read by every aisle. Each ranker takes the same object so a
+    // new signal reaches all of them rather than whichever call site was last
+    // edited.
+    const shopper: Shopper = { skinHex, lipHex, palette, concerns }
 
     const shortlists: Record<string, Ranked[]> = {
-      hair,
-      look: looks,
+      // Ranked against the measured face shape, THEN grouped: the grouping
+      // sort is stable, so the face-shape order survives inside each block.
+      // Filtered on a declared answer like every other aisle; on 'everything'
+      // nothing is dropped, but the two sets are still kept in blocks rather
+      // than shuffled together, led by whichever side the scan read.
+      hair: groupByAudience(
+        rankHair(hair.filter((h) => suitsAudience(h, shopFor)), faceShape),
+        gender,
+      ),
       foundation: rankFoundation(withStore('foundation', foundations), skinHex),
-      lipstick: rankByPalette(withStore('lipstick', lipsticks), palette),
-      blush: rankByPalette(withStore('blush', blushes), palette),
-      clothes: rankByPalette(withStore('clothes', clothes), palette),
+      lipstick: rankLipstick(withStore('lipstick', lipsticks), shopper),
+      blush: rankBlush(withStore('blush', blushes), shopper),
+      clothes: rankClothes(withStore('clothes', clothes), shopper),
       skincare: rankSkincare(withStore('skincare', skincare), concerns),
     }
 
-    // Detected gender demotes mismatched rows rather than removing them: the
-    // read can be wrong, and hiding menswear from a misread is worse than
-    // showing it lower down.
-    const wants = gender?.toLowerCase() === 'male' ? 'men' : gender?.toLowerCase() === 'female' ? 'women' : null
-    if (wants) {
-      for (const list of Object.values(shortlists)) {
-        list.sort((a, b) => rankAudience(a, wants) - rankAudience(b, wants))
-      }
-    }
+    // Aisles the shopper has to ask for. They are still RANKED and still
+    // returned in full, so opening the section costs no second request and
+    // nothing is decided for them twice — they are just not put on the shelf
+    // unasked. Nobody is barred from an aisle; it is one tap away.
+    const gated = gatedAisles(shopFor)
 
-    // The model sees a slice; the shopper sees the whole shelf.
+    // The model sees a slice; the shopper sees the whole shelf. Gated aisles
+    // are withheld from it too, so "how these work together" cannot build a
+    // look around a lipstick the shopper never opened.
     const forJudge = Object.fromEntries(
-      Object.entries(shortlists).map(([k, v]) => [k, v.slice(0, JUDGE_SLICE)]),
+      Object.entries(shortlists)
+        .filter(([k]) => !gated.includes(k))
+        .map(([k, v]) => [k, v.slice(0, JUDGE_SLICE)]),
     )
     const verdict = await judge(
       forJudge,
@@ -593,6 +626,19 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
         season: palette.season,
         finish: formula.finish,
         because: formula.because,
+        skinHex,
+        depth: palette.depth,
+        lipHex,
+        faceShape,
+        // Most pronounced first, and only what was actually measured: an
+        // absent concern must not reach the model as a zero it can write a
+        // sentence about.
+        concerns: [...concerns]
+          .filter((c) => typeof c.raw_score === 'number')
+          .map((c) => ({ type: c.type, severity: Math.round(100 - c.raw_score) }))
+          .sort((a, b) => b.severity - a.severity)
+          .slice(0, 6)
+          .map((c) => `${c.type.replace(/_v2$/, '').replace(/_/g, ' ')} ${c.severity}%`),
       },
       req.signal,
     )
@@ -607,7 +653,16 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       palette,
       formula,
       shortlists,
-      picks: verdict.picks,
+      audience: shopFor,
+      gated,
+      // A folded aisle is withheld from the model, so it comes back with no
+      // picks at all — which would leave it the one shelf a shopper opens to
+      // find nothing recommended. It gets its colour matches instead, labelled
+      // as matches: the aisle is unadvised, not unranked.
+      picks: {
+        ...topMatches(Object.fromEntries(gated.map((a) => [a, shortlists[a] ?? []]))),
+        ...verdict.picks,
+      },
       together: verdict.together,
       concealer,
       makeup: {
@@ -765,11 +820,6 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   'DELETE /api/products': productsRoute,
 }
 
-/** Mismatched audience sinks; unisex and unset stay neutral. */
-function rankAudience(p: { audience?: string }, wants: string): number {
-  if (!p.audience || p.audience === 'unisex') return 0
-  return p.audience === wants ? -1 : 1
-}
 
 /** YouCam fetches ref_file_url from its own servers, so it must be public. */
 function absolute(path: string, req: Request): string {

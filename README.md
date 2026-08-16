@@ -93,15 +93,15 @@ And on the other side of the counter:
 | `POST /s2s/v2.0/task/cloth-v4` | A garment photo rendered on the shopper |
 | `POST /s2s/v2.0/task/cloth` | Template garments (v4 dropped `template_id`) |
 | `POST /s2s/v2.1/task/hair-transfer` | A hairstyle rendered on the shopper |
-| `POST /s2s/v2.0/task/look-vto` | A whole look applied in one pass |
+| `POST /s2s/v2.0/task/look-vto` | A whole look in one pass (wired; no shelf, see below) |
 | `POST /s2s/v2.0/task/skin-simulation` | The same face after a course of treatment |
 | `GET /s2s/v2.x/task/template/*` | YouCam's own garment, look and hair catalogues |
 
 Base URL `https://yce-api-01.makeupar.com`, authenticated with
 `Authorization: Bearer <API_KEY>`.
 
-**What each one decides.** Nothing here is called for display only — every
-response changes a product that gets recommended:
+**What each one decides.** With one named exception, nothing here is called for
+display only — every response changes a product that gets recommended:
 
 - **`skin-tone-analysis`** is the spine. The measured skin hex becomes an
   undertone and a depth in CIELAB, which becomes a seasonal palette, which
@@ -113,16 +113,20 @@ response changes a product that gets recommended:
   dewy on dry. It also aims the skincare aisle at what the scan actually
   flagged.
 - **`face-attr-analysis`** gives face shape, which decides hairstyle ranking,
-  and a detected gender used to *order* the clothes and hair shelves — never to
-  filter them.
+  and a detected gender that *preselects* the Women's / Men's / Everything
+  control. The shopper's own answer is what filters the shelves; the detection
+  only fills it in, because a guess is good enough to preselect a control and
+  not good enough to hide an aisle on its own.
 - **`makeup-vto`** renders foundation, lipstick and blush carrying **your**
   prescribed intensities, so the try-on is your formula in that shade rather
   than a stock preset.
 - **`cloth-v4`** renders any garment from its own product photo, which is what
   lets a merchant's uploaded row be tried on minutes after upload.
   **`cloth`** covers YouCam's template garments, since v4 dropped `template_id`.
-- **`hair-transfer`** and **`look-vto`** render a cut and a whole look in one
-  pass, ranked by the same reading.
+- **`hair-transfer`** renders a cut in one pass, ranked against the measured
+  face shape. **`look-vto`** is wired and works, but has no shelf: on this key
+  its template catalogue is 240 entries across Animals and Sports, all of it
+  novelty face paint rather than anything a shopper buys.
 - **`skin-simulation`** shows the same face after a course of treatment — the
   argument for a skincare product, made on the shopper's own photo.
 - **`file`** uploads the photo once; every task above reuses that id, so a

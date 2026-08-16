@@ -94,6 +94,45 @@ export function deltaE(x: Lab, y: Lab): number {
   return Math.hypot(x.L - y.L, x.a - y.a, x.b - y.b)
 }
 
+/**
+ * Lab in polar form: lightness, colourfulness, hue angle.
+ *
+ * Straight ΔE is right for foundation, where the answer is "the same colour as
+ * her face". It is wrong for everything she WEARS, because it folds lightness,
+ * chroma and hue into one number: a good navy that is two shades lighter than
+ * the reference loses to a muddy one at the exact right L*. Wardrobe and
+ * cosmetic decisions weigh those three separately, so they need them separate.
+ */
+export interface Lch {
+  L: number
+  /** 0 for a pure grey; roughly 20+ before a colour reads as coloured. */
+  C: number
+  /** Degrees, 0-360. Meaningless when C is near zero. */
+  h: number
+}
+
+export function labToLch({ L, a, b }: Lab): Lch {
+  const deg = (Math.atan2(b, a) * 180) / Math.PI
+  return { L, C: Math.hypot(a, b), h: deg < 0 ? deg + 360 : deg }
+}
+
+export const hexToLch = (hex: string): Lch => labToLch(hexToLab(hex))
+
+/** Shortest way round the hue circle, 0-180. */
+export function hueGap(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360
+  return d > 180 ? 360 - d : d
+}
+
+/**
+ * Below this a colour is a neutral: grey, white, charcoal, ecru.
+ *
+ * Neutrals carry no undertone, so they can neither harmonise nor clash and
+ * must not be judged as though they could. Scoring a white shirt against a
+ * "Deep Autumn" palette of rust and forest was the bug this constant fixes.
+ */
+export const NEUTRAL_CHROMA = 12
+
 export type Undertone = 'warm' | 'neutral' | 'cool'
 
 /**
