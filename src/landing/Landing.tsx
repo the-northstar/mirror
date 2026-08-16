@@ -14,6 +14,7 @@ import { SwatchStrip } from './components/SwatchStrip'
 import { useReveal } from './useReveal'
 import { relativeTime, type PastScan } from '../lib/history'
 import './landing.css'
+import { ACCEPTED_TYPES } from '../lib/image'
 
 const PROBLEM = [
   'A shade finder matches a colour and stops there.',
@@ -104,7 +105,7 @@ export function Landing({
           <input
             ref={inputRef}
             type="file"
-            accept="image/jpeg,image/png"
+            accept={ACCEPTED_TYPES}
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0]

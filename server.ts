@@ -51,6 +51,9 @@ import productsRoute, { ownedProducts } from './api/products'
 
 const PORT = Number(process.env.PORT) || 8787
 const MAX_BYTES = 10 * 1024 * 1024
+// YouCam itself takes jpg/png only. The client converts anything else before
+// upload; this stays strict so a direct API call cannot smuggle a format the
+// upstream will reject with a worse error.
 const ALLOWED = ['image/jpeg', 'image/png']
 
 /**
@@ -114,7 +117,11 @@ async function readImage(req: Request): Promise<File> {
   const image = form.get('image')
   if (!(image instanceof File)) throw new YouCamError('No image supplied.', 'error_no_image', 400)
   if (!ALLOWED.includes(image.type)) {
-    throw new YouCamError('Please upload a JPEG or PNG.', 'error_bad_format', 400)
+    throw new YouCamError(
+      'That format cannot be analysed. Upload a JPEG or PNG.',
+      'error_bad_format',
+      400,
+    )
   }
   if (image.size > MAX_BYTES) {
     throw new YouCamError('Photo is over 10MB.', 'exceed_max_filesize', 400)

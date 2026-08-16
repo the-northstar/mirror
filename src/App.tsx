@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Camera } from './Camera'
 import { Studio } from './Studio'
 import { Landing } from './landing/Landing'
+import { normalizeImage } from './lib/image'
 import { fileToDataUrl, loadScans, removeScan, saveScan, type PastScan } from './lib/history'
 import Store from './Store'
 import './App.css'
@@ -90,9 +91,19 @@ export default function App() {
     localStorage.setItem('mirror.cart', JSON.stringify(cart))
   }, [cart])
 
-  const scan = useCallback(async (file: File) => {
+  const scan = useCallback(async (picked: File) => {
     setScreen('scanning')
     setError(null)
+    // YouCam takes jpg/png only, so WebP, HEIC and oversized phone photos are
+    // converted here rather than rejected at the picker.
+    let file: File
+    try {
+      file = await normalizeImage(picked)
+    } catch (err) {
+      setError((err as Error).message)
+      setScreen('land')
+      return
+    }
     setPhoto(URL.createObjectURL(file))
     try {
       const form = new FormData()
