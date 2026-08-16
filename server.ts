@@ -14,7 +14,6 @@ import {
   faultOf,
   clothTemplates,
   hairTemplates,
-  lookTemplates,
   tryOnLook,
   tryOnClothTemplate,
   simulateSkin,
@@ -573,26 +572,17 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
           }),
         ),
       )
-      .catch(() => [])
+      .catch((): Ranked[] => [])
 
-    const looks = await lookTemplates(20)
-      .then(({ templates }) =>
-        templates.map(
-          (l): Ranked => ({
-            id: l.id,
-            aisle: 'look' as never,
-            brand: l.category_name,
-            name: l.title,
-            hex: '#e8e4dd',
-            colorName: 'neutral',
-            image: l.thumb,
-            score: 0,
-            reason: `A complete ${l.category_name.toLowerCase()} look from YouCam's artist catalogue.`,
-          }),
-        ),
-      )
-      .catch(() => [])
-
+    // The "full looks" aisle is gone. On this key the look-vto template
+    // catalogue is 240 entries in two categories — Animals and Sports — and
+    // both are novelty face paint: leopard muzzles, national flags. None of it
+    // is a product a shopper buys, none of it was ranked (every entry carried
+    // a placeholder colour and a score of 0), and a whiskered cat face under a
+    // "Closest match #2" ribbon claimed a measurement nobody made. Nothing was
+    // being recommended, so there was nothing to keep. `tryOnLook` and its
+    // route stay: the capability is fine, it is the shelf that was not.
+    //
     // One reading, read by every aisle. Each ranker takes the same object so a
     // new signal reaches all of them rather than whichever call site was last
     // edited.
@@ -608,7 +598,6 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
         rankHair(hair.filter((h) => suitsAudience(h, shopFor)), faceShape),
         gender,
       ),
-      look: looks,
       foundation: rankFoundation(withStore('foundation', foundations), skinHex),
       lipstick: rankLipstick(withStore('lipstick', lipsticks), shopper),
       blush: rankBlush(withStore('blush', blushes), shopper),

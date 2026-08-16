@@ -98,5 +98,5 @@ export function groupByAudience<T extends { audience?: string }>(
  * request he makes, not a rule about who is allowed to wear what.
  * */
 export function gatedAisles(wants: ShoppingFor): string[] {
-  return wants === 'men' ? ['lipstick', 'blush', 'look'] : []
+  return wants === 'men' ? ['lipstick', 'blush'] : []
 }

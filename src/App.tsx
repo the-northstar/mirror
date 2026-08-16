@@ -91,7 +91,6 @@ const AISLES = [
   { key: 'blush', label: 'Blush' },
   { key: 'skincare', label: 'Skincare' },
   { key: 'hair', label: 'Hair' },
-  { key: 'look', label: 'Full looks' },
   { key: 'clothes', label: 'Clothes' },
 ]
 
@@ -99,10 +98,10 @@ const AISLES = [
 
 /** Aisles YouCam can render, and the makeup subset that shares one payload. */
 const MAKEUP_AISLES = ['foundation', 'lipstick', 'blush']
-const RENDERABLE = [...MAKEUP_AISLES, 'clothes', 'hair', 'skincare', 'look']
+const RENDERABLE = [...MAKEUP_AISLES, 'clothes', 'hair', 'skincare']
 
 /** Renderable but not purchasable: these are inspiration, not stock. */
-const NOT_FOR_SALE = ['hair', 'look']
+const NOT_FOR_SALE = ['hair']
 
 const CONCERN_LABEL: Record<string, string> = {
   oiliness: 'Oiliness', moisture: 'Moisture', redness: 'Redness', acne: 'Acne',
@@ -664,7 +663,6 @@ const AISLE_BLURB: Record<string, string> = {
   skincare: 'Aimed at what your scan flagged',
   clothes: 'Try them on, and colours that suit your undertone',
   hair: 'Cuts rendered on your own photo',
-  look: 'A complete makeup look, rendered in one go',
 }
 
 function ShopView({
@@ -987,12 +985,6 @@ function TryOnButton({
       if (isHair) {
         // The id IS YouCam's template id, so nothing user-supplied is fetched.
         res = await fetch('/api/tryon/hair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileId, templateId: product.id }),
-        })
-      } else if (product.aisle === 'look') {
-        res = await fetch('/api/tryon/look', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileId, templateId: product.id }),
