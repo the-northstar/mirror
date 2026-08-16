@@ -80,19 +80,19 @@ const SHOPKEEPER = [
 const SDK_STEPS = [
   {
     n: '01',
-    t: 'Create a store',
-    d: 'One call. Returns a store id for your page and a secret key for your server.',
-    code: `curl -X POST https://mirror.pykero.com/api/stores \\
-  -d '{"name":"Acme","contactEmail":"you@acme.com"}'
+    t: 'Sign in as a store',
+    d: 'Your keys are waiting under "Add to my site". Nothing to register, nothing to wait for.',
+    code: `Store → Add to my site
 
-→ { "id": "store-acme-1", "apiKey": "mk_f80…" }`,
+Store ID   own-99887766      (public)
+API key    mk_own-9988…      (secret)`,
   },
   {
     n: '02',
     t: 'Send your catalogue',
-    d: 'Point us at a feed you already publish — or push rows when they change.',
+    d: 'Add products on the Store page, or point us at a feed you already publish.',
     code: `curl -X POST https://mirror.pykero.com/api/sdk/feed \\
-  -H 'Authorization: Bearer mk_f80…' \\
+  -H 'Authorization: Bearer YOUR_API_KEY' \\
   -d '{"url":"https://acme.com/products.json"}'
 
 → { "added": 128, "rejected": 2 }`,
@@ -103,7 +103,7 @@ const SDK_STEPS = [
     d: 'A button appears on your storefront. Mirror opens over it, in an iframe.',
     code: `<script
   src="https://mirror.pykero.com/sdk/mirror.js"
-  data-store="store-acme-1" defer></script>`,
+  data-store="own-99887766" defer></script>`,
   },
 ]
 
@@ -418,35 +418,67 @@ export function Landing({
           <h2 className="mt-5 max-w-2xl font-serif text-4xl leading-[1.05] tracking-[-0.02em] text-[color-mix(in_oklab,var(--paper)_92%,transparent)] sm:text-5xl">
             One line of HTML. Your catalogue, measured.
           </h2>
-          <p className="mt-7 max-w-xl text-[17px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_65%,transparent)]">
-            Drop the widget on your storefront and Mirror opens over it — the shopper is read,
-            and only <em>your</em> products are ranked against them. Or call the engine
-            headlessly and render the result in your own interface.
+          <p className="mt-7 max-w-2xl text-[17px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_65%,transparent)]">
+            A shopper on your site taps one button. They take a selfie, Mirror measures their
+            skin, and it recommends <em>your</em> products — each one naming the measurement that
+            chose it. They never leave your storefront, and you write no interface.
           </p>
 
-          <pre className="mt-12 overflow-x-auto rounded-lg border border-[color-mix(in_oklab,var(--paper)_18%,transparent)] bg-[color-mix(in_oklab,var(--paper)_6%,transparent)] p-6 font-mono text-[12px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_85%,transparent)]">
-{`<script src="https://mirror.pykero.com/sdk/mirror.js"
-        data-store="store-acme-1" defer></script>`}
-          </pre>
-
-          <div className="mt-12 grid gap-8 sm:grid-cols-3">
-            {SDK_FEEDS.map((f) => (
-              <div
-                key={f.t}
-                className="border-t border-[color-mix(in_oklab,var(--paper)_22%,transparent)] pt-5"
-              >
-                <h3 className="font-serif text-xl text-[color-mix(in_oklab,var(--paper)_92%,transparent)]">
-                  {f.t}
+          <ol className="mt-16 grid gap-10 lg:grid-cols-3">
+            {SDK_STEPS.map((s) => (
+              <li key={s.n} className="flex flex-col">
+                <span className="font-mono text-[11px] tracking-[0.28em] text-[var(--gilt)]">
+                  {s.n}
+                </span>
+                <h3 className="mt-4 font-serif text-2xl text-[color-mix(in_oklab,var(--paper)_92%,transparent)]">
+                  {s.t}
                 </h3>
-                <p className="mt-2 text-[14px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_60%,transparent)]">
-                  {f.d}
+                <p className="mt-3 text-[15px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_60%,transparent)]">
+                  {s.d}
                 </p>
-              </div>
+                <pre className="mt-6 flex-1 overflow-x-auto rounded-lg border border-[color-mix(in_oklab,var(--paper)_18%,transparent)] bg-[color-mix(in_oklab,var(--paper)_6%,transparent)] p-5 font-mono text-[11.5px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_85%,transparent)]">
+                  {s.code}
+                </pre>
+              </li>
             ))}
+          </ol>
+
+          <div className="mt-16 grid gap-10 border-t border-[color-mix(in_oklab,var(--paper)_20%,transparent)] pt-12 lg:grid-cols-2">
+            <div>
+              <h3 className="font-serif text-2xl text-[color-mix(in_oklab,var(--paper)_92%,transparent)]">
+                Want your own interface instead?
+              </h3>
+              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_60%,transparent)]">
+                Skip the widget and call the engine directly. Same measurements, same ranking —
+                you render it. The widget is built on exactly this, so nothing is hidden behind
+                it.
+              </p>
+            </div>
+            <pre className="overflow-x-auto rounded-lg border border-[color-mix(in_oklab,var(--paper)_18%,transparent)] bg-[color-mix(in_oklab,var(--paper)_6%,transparent)] p-5 font-mono text-[11.5px] leading-relaxed text-[color-mix(in_oklab,var(--paper)_85%,transparent)]">
+{`const mirror  = createMirror({ storeId: 'store-acme-1' })
+const reading = await mirror.scan(selfie)
+const shop    = await mirror.shop(reading)
+
+shop.shortlists.lipstick[0]
+→ { name: 'Velvet Rouge', price: 29,
+    reason: 'Warm undertone, depth 4/6.' }`}
+            </pre>
           </div>
 
-          <p className="mt-12 max-w-xl font-mono text-[12px] leading-relaxed text-[var(--signal)]">
-            Rows without a resolvable colour are rejected rather than stored — ranking sorts on
+          <div className="mt-14 flex flex-wrap items-baseline gap-x-8 gap-y-3">
+            <a
+              href="https://github.com/the-northstar/mirror/blob/main/docs/sdk.md"
+              className="font-mono text-[12px] uppercase tracking-[0.22em] text-[var(--gilt)] underline underline-offset-4 hover:text-[color-mix(in_oklab,var(--paper)_92%,transparent)]"
+            >
+              Read the full SDK docs →
+            </a>
+            <span className="font-mono text-[11px] leading-relaxed text-[var(--signal)]">
+              Feeds: JSON · CSV · Shopify · push API
+            </span>
+          </div>
+
+          <p className="mt-10 max-w-xl font-mono text-[12px] leading-relaxed text-[var(--signal)]">
+            A product with no readable colour is rejected, never stored — ranking sorts on
             colour, so an uncoloured row would be noise pretending to be a recommendation.
           </p>
         </div>

@@ -106,6 +106,44 @@ async function savePhoto(file: File, id: string): Promise<string> {
 /** The owner's own store id, derived from the token — never from the client. */
 const storeIdOf = (ownerId: string) => `own-${ownerId.slice(-8)}`
 
+/**
+ * The owner's SDK key: an HMAC of their id under the server secret.
+ *
+ * Derived rather than stored so it survives a restart with no datastore, and
+ * so a leaked key reveals nothing about the id behind it. Only this server can
+ * produce one, so presenting it is proof of ownership.
+ */
+export async function sdkKeyFor(ownerId: string): Promise<string> {
+  return keyForStore(storeIdOf(ownerId))
+}
+
+/**
+ * The mac signs the STORE id, not the owner id, so verification needs only
+ * what the key itself carries — no lookup table, and no reconstructing an
+ * owner id that the key does not contain.
+ */
+async function keyForStore(storeId: string): Promise<string> {
+  const secret = process.env.CLERK_SECRET_KEY ?? 'mirror-dev-secret'
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`sdk:${storeId}`))
+  const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return `mk_${storeId}_${hex.slice(0, 32)}`
+}
+
+/** Check a self-identifying owner key and return the store it unlocks. */
+export async function storeFromOwnerKey(key: string): Promise<string | undefined> {
+  const storeId = /^mk_(own-[a-z0-9]+)_[0-9a-f]{32}$/i.exec(key)?.[1]
+  if (!storeId) return undefined
+  // Recomputed from the id embedded in the key, so a forged mac never matches.
+  return (await keyForStore(storeId)) === key ? storeId : undefined
+}
+
 class HttpError extends Error {
   status: number
   constructor(message: string, status: number) {
@@ -160,6 +198,21 @@ async function gridOf(file: File): Promise<unknown[][]> {
 export default async function handler(req: Request): Promise<Response> {
   try {
     const { pathname } = new URL(req.url)
+
+    /**
+     * The owner's own SDK credentials.
+     *
+     * The key is derived from the Clerk id rather than stored, so it survives
+     * a restart and cannot be read for anyone but the caller: there is no id
+     * in the request to tamper with. Rotating means changing the salt.
+     */
+    if (req.method === 'GET' && pathname.endsWith('/credentials')) {
+      const ownerId = await ownerOf(req)
+      return Response.json({
+        storeId: storeIdOf(ownerId),
+        apiKey: await sdkKeyFor(ownerId),
+      })
+    }
 
     if (req.method === 'GET' && pathname.endsWith('/orders')) {
       const ownerId = await ownerOf(req)

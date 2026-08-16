@@ -12,9 +12,26 @@ Base URL: `https://mirror.pykero.com`
 
 ---
 
-## Getting a store
+## Getting your keys
 
-One call. Keep the `apiKey` — it is shown once and never appears in any listing.
+**Sign in at [/store](https://mirror.pykero.com/store) and open the
+"Add to my site" tab.** Your store id and API key are already there — signing
+in creates them. Copy the snippet and you are done; nothing to register.
+
+| Field | Where it goes |
+|---|---|
+| Store ID | Public. Safe in your page's HTML. |
+| API key | Secret. Server-side only — it can write to your catalogue. |
+
+The key is derived from your account rather than stored, so it is the same
+every time you look and it survives a restart. To rotate one, ask us — it
+changes with the server secret.
+
+<details>
+<summary>Registering a store over the API instead</summary>
+
+For a store with no owner account — a platform integrating on someone's
+behalf, say:
 
 ```bash
 curl -X POST https://mirror.pykero.com/api/stores \
@@ -26,10 +43,10 @@ curl -X POST https://mirror.pykero.com/api/stores \
 { "store": { "id": "store-acme-beauty-1", "apiKey": "mk_f80808cd…" } }
 ```
 
-| Field | Where it goes |
-|---|---|
-| `id` | Public. Safe in your page's HTML. |
-| `apiKey` | Secret. Server-side only — it can write to your catalogue. |
+This key is shown **once** and never appears in any listing. Both kinds of key
+work identically everywhere below.
+
+</details>
 
 ---
 

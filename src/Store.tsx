@@ -86,9 +86,10 @@ function Owner() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imported, setImported] = useState<string | null>(null)
-  const [tab, setTab] = useState<'products' | 'orders' | 'finance'>('products')
+  const [tab, setTab] = useState<'products' | 'orders' | 'finance' | 'sdk'>('products')
   const [orders, setOrders] = useState<Order[]>([])
   const [finance, setFinance] = useState<Finance | null>(null)
+  const [keys, setKeys] = useState<{ storeId: string; apiKey: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const call = useCallback(
@@ -121,6 +122,11 @@ function Owner() {
       setFinance(books.finance)
     } catch {
       /* leave the last figures on screen */
+    }
+    try {
+      setKeys(await call('/api/products/credentials'))
+    } catch {
+      /* the SDK panel simply stays hidden */
     }
   }, [call])
 
@@ -220,6 +226,7 @@ function Owner() {
             ['products', `Products (${mine.length})`],
             ['orders', `Orders (${orders.length})`],
             ['finance', 'Finance'],
+            ['sdk', 'Add to my site'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -651,7 +658,124 @@ function Owner() {
         </section>
       )}
 
+      {tab === 'sdk' && <SdkPanel keys={keys} count={mine.length} />}
+
     </main>
+  )
+}
+
+/**
+ * The owner's own credentials and the snippet that uses them.
+ *
+ * The whole point is that a shopkeeper never has to run curl to get a key:
+ * signing in IS the registration, so this only has to show what they already
+ * have and where to paste it.
+ */
+function SdkPanel({
+  keys,
+  count,
+}: {
+  keys: { storeId: string; apiKey: string } | null
+  count: number
+}) {
+  const [shown, setShown] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const copy = (what: string, text: string) => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(what)
+      setTimeout(() => setCopied(null), 1600)
+    })
+  }
+
+  if (!keys) {
+    return (
+      <section className="stack">
+        <h3>Add Mirror to your own site</h3>
+        <p className="tiny">Loading your keys…</p>
+      </section>
+    )
+  }
+
+  const snippet = `<script src="${window.location.origin}/sdk/mirror.js"\n        data-store="${keys.storeId}" defer></script>`
+
+  return (
+    <section className="stack">
+      <h3>Add Mirror to your own site</h3>
+      <p className="tiny">
+        Shoppers on your site scan their face and see <em>your</em> products — they never
+        have to come here. These keys are yours; they were made when you signed in.
+      </p>
+
+      <div className="card stack">
+        <div>
+          <span className="kicker">Store ID</span>
+          <p className="tiny">Public. This goes in your page.</p>
+          <div className="keyrow">
+            <code>{keys.storeId}</code>
+            <button className="btn btn-sm btn-quiet" onClick={() => copy('id', keys.storeId)}>
+              {copied === 'id' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <span className="kicker">API key</span>
+          <p className="tiny">
+            Secret — it can change your catalogue. Keep it on your server, never in a page.
+          </p>
+          <div className="keyrow">
+            <code>{shown ? keys.apiKey : '•'.repeat(28)}</code>
+            <button className="btn btn-sm btn-quiet" onClick={() => setShown((v) => !v)}>
+              {shown ? 'Hide' : 'Reveal'}
+            </button>
+            <button className="btn btn-sm btn-quiet" onClick={() => copy('key', keys.apiKey)}>
+              {copied === 'key' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card stack">
+        <span className="kicker">Step 1 — paste this into your site</span>
+        <p className="tiny">
+          Anywhere before <code>&lt;/body&gt;</code>. A button appears; Mirror opens over
+          your page.
+        </p>
+        <pre className="snippet">{snippet}</pre>
+        <button className="btn btn-sm" onClick={() => copy('snippet', snippet)}>
+          {copied === 'snippet' ? 'Copied' : 'Copy snippet'}
+        </button>
+        {count === 0 && (
+          <p className="notice" role="status">
+            Add a product first, or the widget will have nothing to recommend.
+          </p>
+        )}
+      </div>
+
+      <div className="card stack">
+        <span className="kicker">Step 2 — keep your catalogue in sync (optional)</span>
+        <p className="tiny">
+          Products you add here are already live. If your shop has its own feed, point us
+          at it from your server instead:
+        </p>
+        <pre className="snippet">{`curl -X POST ${window.location.origin}/api/sdk/feed \\
+  -H 'Authorization: Bearer YOUR_API_KEY' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"url":"https://your-shop.com/products.json"}'`}</pre>
+        <p className="tiny">
+          JSON, CSV or a Shopify domain. A feed replaces your catalogue, so send all of it.
+        </p>
+      </div>
+
+      <p className="tiny">
+        Full reference:{' '}
+        <a href="https://github.com/the-northstar/mirror/blob/main/docs/sdk.md">
+          the SDK docs
+        </a>
+        .
+      </p>
+    </section>
   )
 }
 

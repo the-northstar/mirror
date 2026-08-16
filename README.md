@@ -127,10 +127,15 @@ domain, an authenticated push, or inline in the snippet. All four land in the
 same validation, so a row without a resolvable colour is rejected with a reason
 whichever door it came through.
 
-Writes are authenticated by a per-store key sent as a Bearer token, and the
-**key identifies the store** rather than the request body naming one — so a key
-can only ever write to its own shelf. It is returned once at store creation and
-stripped from every listing.
+**A store owner gets their keys by signing in**, not by calling an API: the
+Store page has an "Add to my site" tab with the store id, the key and the
+snippet ready to copy. The key is an HMAC of their store id under the server
+secret, so it is derived rather than stored — the same every time they look,
+and it survives a restart with no datastore. A store with no owner account can
+still register over `POST /api/stores` and gets a random key instead.
+
+Either way the **key identifies the store** rather than the request body naming
+one, so a key can only ever write to its own shelf.
 
 ## Running it
 

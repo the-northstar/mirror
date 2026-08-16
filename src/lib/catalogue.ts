@@ -361,6 +361,22 @@ export interface Store {
 const stores = new Map<string, Store>()
 const storeProducts = new Map<string, Product[]>()
 
+/**
+ * Register a store under an id we were given rather than one we mint.
+ *
+ * A signed-in owner already has an implicit store id derived from their Clerk
+ * id, so the first SDK call materialises it here instead of asking them to
+ * register a second, separate store.
+ */
+export function ensureStore(id: string, name = 'Your store'): Store {
+  const existing = stores.get(id)
+  if (existing) return existing
+  const store: Store = { id, name, contactEmail: '', apiKey: '' }
+  stores.set(id, store)
+  storeProducts.set(id, storeProducts.get(id) ?? [])
+  return store
+}
+
 export function createStore(input: Omit<Store, 'id' | 'apiKey'>): Store {
   const store: Store = {
     ...input,
@@ -377,8 +393,9 @@ export const getStore = (id: string) => stores.get(id)
 /** The key is a secret, so public listings never carry it. */
 export const listStores = () => [...stores.values()].map(({ apiKey: _k, ...s }) => s)
 
+/** An empty key never matches, so a keyless store cannot be unlocked by one. */
 export const storeByKey = (key: string) =>
-  [...stores.values()].find((s) => s.apiKey === key)
+  key ? [...stores.values()].find((s) => s.apiKey && s.apiKey === key) : undefined
 
 /** Replaces a store's rows wholesale — what a re-pulled feed should do. */
 export function replaceStoreProducts(storeId: string, rows: Product[]) {

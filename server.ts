@@ -33,6 +33,7 @@ import { GARMENTS } from './src/lib/garments'
 import {
   addProducts,
   createStore,
+  ensureStore,
   listStores,
   loadMakeup,
   loadClothes,
@@ -65,6 +66,7 @@ import productsRoute, {
   ownedProducts,
   persistOrders,
   restoreOrdersFromDisk,
+  storeFromOwnerKey,
 } from './api/products'
 
 const PORT = Number(process.env.PORT) || 8787
@@ -237,10 +239,19 @@ function fail(err: unknown, where: string): Response {
  * Read from the Authorization header rather than the body or a query string:
  * a key in a URL ends up in access logs and Referer headers.
  */
-function storeFromKey(req: Request) {
+async function storeFromKey(req: Request): Promise<{ id: string } | undefined> {
   const header = req.headers.get('authorization') ?? ''
   const key = header.replace(/^Bearer\s+/i, '').trim()
-  return key ? storeByKey(key) : undefined
+  if (!key) return undefined
+
+  // A store registered through POST /api/stores carries its own key.
+  const registered = storeByKey(key)
+  if (registered) return registered
+
+  // A signed-in owner's key names its own store and is verified by recomputing
+  // the mac — nothing stored, so it survives a restart.
+  const owned = await storeFromOwnerKey(key)
+  return owned ? { id: owned } : undefined
 }
 
 async function readImage(req: Request): Promise<File> {
@@ -663,8 +674,10 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
    * ever write to their own shelf — the body never names one.
    */
   'POST /api/sdk/products': async (req) => {
-    const store = storeFromKey(req)
+    const store = await storeFromKey(req)
     if (!store) return json({ error: 'Invalid or missing API key.' }, 401)
+    // An owner's store is implicit until they first use the SDK.
+    ensureStore(store.id)
 
     const { products, replace } = (await req.json()) as {
       products?: unknown
@@ -682,8 +695,10 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
 
   /** Point the store at a hosted feed and pull it once, now. */
   'POST /api/sdk/feed': async (req) => {
-    const store = storeFromKey(req)
+    const store = await storeFromKey(req)
     if (!store) return json({ error: 'Invalid or missing API key.' }, 401)
+    // An owner's store is implicit until they first use the SDK.
+    ensureStore(store.id)
 
     const { url, kind } = (await req.json()) as { url?: string; kind?: FeedKind }
     if (!url || !/^https?:\/\//i.test(url)) {
@@ -705,7 +720,11 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   'GET /api/sdk/catalogue': async (req) => {
     const storeId = new URL(req.url).searchParams.get('storeId')
     if (!storeId) return json({ error: 'Missing storeId.' }, 400)
-    if (!getStore(storeId)) return json({ error: 'Unknown store.' }, 404)
+    // An owner's store exists as soon as they have an id, whether or not the
+    // SDK has been used yet — an empty shelf is a valid answer, not a 404.
+    if (!getStore(storeId) && !storeId.startsWith('own-')) {
+      return json({ error: 'Unknown store.' }, 404)
+    }
     return json({ products: productsForStore(storeId) })
   },
 
@@ -727,6 +746,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   /** Store-owner catalogue. Auth and ownership live in the handler. */
   'GET /api/products': productsRoute,
   'GET /api/products/orders': productsRoute,
+  'GET /api/products/credentials': productsRoute,
   'POST /api/products': productsRoute,
   'POST /api/products/import': productsRoute,
   'DELETE /api/products': productsRoute,
