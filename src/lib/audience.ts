@@ -96,7 +96,16 @@ export function groupByAudience<T extends { audience?: string }>(
  * catalogue holds nothing for him. Neither is true. Instead the aisles ship
  * complete and ranked, and the UI keeps them closed until he opens them: a
  * request he makes, not a rule about who is allowed to wear what.
- * */
+ *
+ * Foundation is folded with them. It is still the aisle the shade-matching
+ * work goes into, and the match is still computed for everyone — the reading
+ * feeds the concealer and the try-on render either way — but it is not put on
+ * a men's shelf unasked.
+ *
+ * SKINCARE IS NEVER FOLDED, and that is the line: it treats a measured
+ * condition rather than colouring a face, so a man who scanned for his
+ * oiliness came for exactly that shelf.
+ */
 export function gatedAisles(wants: ShoppingFor): string[] {
-  return wants === 'men' ? ['lipstick', 'blush'] : []
+  return wants === 'men' ? ['foundation', 'lipstick', 'blush'] : []
 }

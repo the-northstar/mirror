@@ -820,6 +820,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   'DELETE /api/products': productsRoute,
 }
 
+
 /** YouCam fetches ref_file_url from its own servers, so it must be public. */
 function absolute(path: string, req: Request): string {
   if (/^https?:\/\//i.test(path)) return path

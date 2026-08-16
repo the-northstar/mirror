@@ -107,16 +107,18 @@ describe('grouping rather than interleaving', () => {
 
 describe('folded aisles', () => {
   test('colour cosmetics are folded away for a men’s shelf', () => {
+    expect(gatedAisles('men')).toContain('foundation')
     expect(gatedAisles('men')).toContain('lipstick')
     expect(gatedAisles('men')).toContain('blush')
   })
 
-  test('foundation and skincare are never folded', () => {
-    // They are not gendered products, and a man who scanned for his skin
-    // condition came for exactly these.
-    expect(gatedAisles('men')).not.toContain('foundation')
+  test('skincare is never folded', () => {
+    // The line between the two: skincare treats a measured condition rather
+    // than colouring a face, so a man who scanned for his oiliness came for
+    // exactly that shelf.
     expect(gatedAisles('men')).not.toContain('skincare')
     expect(gatedAisles('men')).not.toContain('clothes')
+    expect(gatedAisles('men')).not.toContain('hair')
   })
 
   test('nothing is folded for anyone else', () => {
