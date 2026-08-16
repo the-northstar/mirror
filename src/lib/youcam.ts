@@ -109,7 +109,10 @@ export async function runTask<T>(
     body: JSON.stringify(params),
   })
 
-  const deadline = Date.now() + 4 * 60_000
+  // Must stay comfortably under the server's idleTimeout: if the connection
+  // is cut first the client gets an empty body, which surfaces as
+  // "Unexpected end of JSON input" rather than anything actionable.
+  const deadline = Date.now() + 3 * 60_000
   let wait = 2000
 
   while (Date.now() < deadline) {
@@ -353,6 +356,23 @@ export const SIMULATION_CONCERNS: Record<string, string> = {
   age_spot: 'age_spot',
   dark_circle_v2: 'dark_circle',
 }
+
+/**
+ * Full-look try-on: a complete makeup look in one render, from YouCam's own
+ * artist catalogue. Ranking cannot reach these — they are curated, not
+ * coloured — so they are offered as looks rather than recommended.
+ */
+export const lookTemplates = (pageSize = 20) =>
+  call<{ templates: ClothTemplate[]; next_token?: string }>(
+    `/s2s/v2.0/task/template/look-vto?page_size=${pageSize}`,
+  )
+
+export const tryOnLook = (srcFileId: string, templateId: string, signal?: AbortSignal) =>
+  runTask<{ url: string }>(
+    'look-vto',
+    { src_file_id: srcFileId, template_id: templateId },
+    { signal },
+  ).then((r) => r.url)
 
 export interface HairTemplate {
   id: string

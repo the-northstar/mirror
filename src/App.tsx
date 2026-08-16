@@ -63,6 +63,7 @@ const AISLES = [
   { key: 'blush', label: 'Blush' },
   { key: 'skincare', label: 'Skincare' },
   { key: 'hair', label: 'Hair' },
+  { key: 'look', label: 'Full looks' },
   { key: 'clothes', label: 'Clothes' },
 ]
 
@@ -70,7 +71,7 @@ const AISLES = [
 
 /** Aisles YouCam can render, and the makeup subset that shares one payload. */
 const MAKEUP_AISLES = ['foundation', 'lipstick', 'blush']
-const RENDERABLE = [...MAKEUP_AISLES, 'clothes', 'hair', 'skincare']
+const RENDERABLE = [...MAKEUP_AISLES, 'clothes', 'hair', 'skincare', 'look']
 
 const CONCERN_LABEL: Record<string, string> = {
   oiliness: 'Oiliness', moisture: 'Moisture', redness: 'Redness', acne: 'Acne',
@@ -130,7 +131,15 @@ export default function App() {
     if (raw) setCart(JSON.parse(raw))
     const savedLines = localStorage.getItem('mirror.cart.lines')
     if (savedLines) setCartLines(JSON.parse(savedLines))
-    setScans(loadScans())
+    const saved = loadScans()
+    setScans(saved)
+    // A reload keeps the scan but not the prescription, so restore the most
+    // recent reading straight away rather than asking for a tap. Re-opening
+    // is free; the shop is recomputed because the shelf may have moved.
+    if (saved[0]) {
+      setReading(saved[0].reading as Reading)
+      setPhoto(saved[0].photo)
+    }
   }, [])
   useEffect(() => {
     localStorage.setItem('mirror.cart', JSON.stringify(cart))
@@ -186,6 +195,12 @@ export default function App() {
     }
   }, [])
 
+  /** The camera lives on the landing screen, so go there and open it. */
+  const newScan = useCallback(() => {
+    setShooting(true)
+    setScreen('land')
+  }, [setScreen])
+
   const reopen = useCallback((scan: PastScan) => {
     setReading(scan.reading as Reading)
     setPhoto(scan.photo)
@@ -213,8 +228,10 @@ export default function App() {
           gender: reading.face?.agegender?.gender,
         }),
       })
-      const body = await res.json()
-      if (!res.ok) throw new Error(body?.error ?? 'Could not load the shop.')
+      const body = await res.json().catch(() => null)
+      if (!res.ok || !body?.shortlists) {
+        throw new Error(body?.error ?? 'Could not load the shop. Try again.')
+      }
       setShop(body)
     } catch (err) {
       setError((err as Error).message)
@@ -256,6 +273,14 @@ export default function App() {
           </nav>
         ) : (
           <span className="bar-tag">instrument for skin · built on YouCam</span>
+        )}
+
+        {/* The landing already leads with the camera, and interrupting a scan
+            in progress would throw away the units it is spending. */}
+        {screen !== 'land' && screen !== 'scanning' && (
+          <button className="navlink" onClick={newScan}>
+            New scan
+          </button>
         )}
 
         <button
@@ -323,10 +348,10 @@ export default function App() {
           />
         ))}
       {screen === 'scanning' && <Scanning photo={photo} />}
-      {/* A reload lands here with no reading in memory. Without this the screen
-          renders nothing at all and the page just goes white. */}
+      {/* Without this the screen renders nothing at all and the page goes
+          white — reached only when there is no saved scan to restore. */}
       {(screen === 'diagnosis' || screen === 'shop') && !reading && (
-        <NoReading scans={scans} onReopen={reopen} onStart={() => setScreen('land')} />
+        <NoReading onStart={newScan} />
       )}
       {screen === 'diagnosis' && reading && (
         <Diagnosis reading={reading} photo={photo} onShop={openShop} />
@@ -335,6 +360,7 @@ export default function App() {
         <ShopView
           shop={shop}
           reading={reading}
+          photo={photo}
           onAdd={(id) => {
             setCart((c) => ({ ...c, [id]: (c[id] ?? 0) + 1 }))
             const p = Object.values(shop?.shortlists ?? {})
@@ -558,15 +584,18 @@ const AISLE_BLURB: Record<string, string> = {
   skincare: 'Aimed at what your scan flagged',
   clothes: 'Try them on, and colours that suit your undertone',
   hair: 'Cuts rendered on your own photo',
+  look: 'A complete makeup look, rendered in one go',
 }
 
 function ShopView({
   shop,
   reading,
+  photo,
   onAdd,
 }: {
   shop: Shop | null
   reading: Reading
+  photo: string | null
   onAdd: (id: string) => void
 }) {
   // Null means "not chosen yet", which is what shows the chooser.
@@ -708,6 +737,7 @@ function ShopView({
             onAdd={onAdd}
             reading={reading}
             makeupEffects={shop.makeup.effects}
+            photo={photo}
           />
         ))}
       </div>
@@ -733,6 +763,7 @@ function ProductCard({
   onAdd,
   reading,
   makeupEffects,
+  photo,
 }: {
   product: RankedItem
   featured: boolean
@@ -740,6 +771,7 @@ function ProductCard({
   onAdd: (id: string) => void
   reading: Reading
   makeupEffects: unknown[]
+  photo?: string | null
 }) {
   // Everything YouCam can render gets a button on its own card.
   const canTryOn = RENDERABLE.includes(product.aisle)
@@ -774,6 +806,7 @@ function ProductCard({
               effects={makeupEffects}
               product={product}
               concerns={reading.concerns}
+              photo={photo}
             />
           )}
         </div>
@@ -797,11 +830,14 @@ function TryOnButton({
   effects,
   product,
   concerns = [],
+  photo,
 }: {
   fileId: string
   effects: unknown[]
   product: RankedItem
   concerns?: Reading['concerns']
+  /** The scan photo, so every render can be compared against the original. */
+  photo?: string | null
 }) {
   const [url, setUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -820,6 +856,12 @@ function TryOnButton({
       if (isHair) {
         // The id IS YouCam's template id, so nothing user-supplied is fetched.
         res = await fetch('/api/tryon/hair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId, templateId: product.id }),
+        })
+      } else if (product.aisle === 'look') {
+        res = await fetch('/api/tryon/look', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fileId, templateId: product.id }),
@@ -867,8 +909,14 @@ function TryOnButton({
         throw new Error('This one cannot be rendered.')
       }
 
-      const body = await res.json()
-      if (!res.ok) throw new Error(body?.error ?? 'Try-on failed.')
+      // A severed or empty response must not surface as a JSON parse error.
+      const body = await res.json().catch(() => null)
+      if (!res.ok || !body?.url) {
+        throw new Error(
+          body?.error ??
+            'That render took too long and was cut short. Try again.',
+        )
+      }
       setUrl(body.url)
     } catch (e) {
       setErr((e as Error).message)
@@ -883,9 +931,18 @@ function TryOnButton({
         {busy ? 'Rendering…' : url ? 'Again' : 'Try it on'}
       </button>
       {url && (
-        <div className="tryon-result rise">
-          <img src={url} alt={`You wearing ${product.name}`} />
-        </div>
+        <figure className="tryon-result rise">
+          <div className="ba">
+            <div className="ba-half">
+              {photo && <img src={photo} alt="Before" />}
+              <figcaption className="ba-tag">Before</figcaption>
+            </div>
+            <div className="ba-half">
+              <img src={url} alt={`After: ${product.name}`} />
+              <figcaption className="ba-tag ba-tag-after">After</figcaption>
+            </div>
+          </div>
+        </figure>
       )}
       {err && <p className="tiny error-text">{err}</p>}
     </>
@@ -906,36 +963,18 @@ function decode(s: string): string {
 /* -- Cart --------------------------------------------------------------- */
 
 /**
- * Reloading /diagnosis or /shop arrives with no reading: the scan is kept but
- * the prescription is recomputed, never persisted. Offer the saved scans so a
- * refresh costs a tap rather than another scan.
+ * A reload restores the last scan automatically, so this is only reached by
+ * someone deep-linking to /diagnosis or /shop who has never scanned.
  */
-function NoReading({
-  scans,
-  onReopen,
-  onStart,
-}: {
-  scans: PastScan[]
-  onReopen: (s: PastScan) => void
-  onStart: () => void
-}) {
+function NoReading({ onStart }: { onStart: () => void }) {
   return (
     <main className="wrap">
       <div className="card empty">
-        <h3>Your reading isn't loaded</h3>
-        <p className="tiny">
-          {scans.length > 0
-            ? 'Re-open your last scan to pick up where you left off. It costs nothing.'
-            : 'Scan your face to get your reading.'}
-        </p>
+        <h3>No reading yet</h3>
+        <p className="tiny">Scan your face and this fills in.</p>
         <div className="land-actions">
-          {scans.length > 0 && scans[0] && (
-            <button className="btn" onClick={() => onReopen(scans[0]!)}>
-              Re-open last scan
-            </button>
-          )}
-          <button className="btn btn-quiet" onClick={onStart}>
-            Start a new scan
+          <button className="btn" onClick={onStart}>
+            Scan my face
           </button>
         </div>
       </div>

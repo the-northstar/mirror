@@ -14,6 +14,8 @@ import {
   faultOf,
   clothTemplates,
   hairTemplates,
+  lookTemplates,
+  tryOnLook,
   tryOnClothTemplate,
   simulateSkin,
   SIMULATION_CONCERNS,
@@ -341,6 +343,12 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     return json({ url })
   },
 
+  'POST /api/tryon/look': async (req) => {
+    const { fileId, templateId } = (await req.json()) as Record<string, string>
+    if (!fileId || !templateId) return json({ error: 'Missing photo or look.' }, 400)
+    return json({ url: await tryOnLook(fileId, templateId, req.signal) })
+  },
+
   'GET /api/hair/templates': async () => json(await hairTemplates(20)),
 
   'GET /api/cloth/templates': async () => json(await clothTemplates(20)),
@@ -442,8 +450,27 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       )
       .catch(() => [])
 
+    const looks = await lookTemplates(20)
+      .then(({ templates }) =>
+        templates.map(
+          (l): Ranked => ({
+            id: l.id,
+            aisle: 'look' as never,
+            brand: l.category_name,
+            name: l.title,
+            hex: '#e8e4dd',
+            colorName: 'neutral',
+            image: l.thumb,
+            score: 0,
+            reason: `A complete ${l.category_name.toLowerCase()} look from YouCam's artist catalogue.`,
+          }),
+        ),
+      )
+      .catch(() => [])
+
     const shortlists: Record<string, Ranked[]> = {
       hair,
+      look: looks,
       foundation: rankFoundation(withStore('foundation', foundations), skinHex),
       lipstick: rankByPalette(withStore('lipstick', lipsticks), palette),
       blush: rankByPalette(withStore('blush', blushes), palette),
