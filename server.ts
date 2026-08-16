@@ -343,12 +343,17 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
 
     // Resolve by id against what is actually on the shelf, never from the
     // request body, or the browser could point this server at any host.
+    //
+    // Every source the shelf is built from has to be searched here, or a row
+    // the shopper can see is one they cannot try on. The committed CSV
+    // catalogue is the biggest of them, and was missing.
     const shelfRows = shelves.get('clothes')?.rows ?? []
     const fromShelf = shelfRows.find((p) => p.id === garmentId)
+    const fromLocal = localFor('clothes').find((p) => p.id === garmentId)
     const fromStore = productsForAisle('clothes').find((p) => p.id === garmentId)
     const owned = await ownedProducts().catch(() => [])
     const fromOwner = owned.find((p) => p.id === garmentId)
-    const product = fromOwner ?? fromStore ?? fromShelf
+    const product = fromOwner ?? fromStore ?? fromLocal ?? fromShelf
     const legacy = GARMENTS.find((g) => g.id === garmentId)
 
     // An uploaded photo is a path on our own origin; YouCam fetches from its
