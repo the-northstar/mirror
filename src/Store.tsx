@@ -351,7 +351,7 @@ function Owner() {
             Nothing yet. Add one above, or import a spreadsheet.
           </p>
         ) : (
-          <div className="grid">
+          <div className="tile-grid">
             {mine.map((p) => (
               <figure key={p.id} className="tile">
                 <img src={p.image} alt="" loading="lazy" />

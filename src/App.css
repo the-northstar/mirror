@@ -1355,8 +1355,9 @@
   gap: 12px;
 }
 
-/* Product tiles: as many as fit, never narrower than a thumb-sized card. */
-.grid {
+/* Product tiles: as many as fit, never narrower than a thumb-sized card.
+   Named, not `.grid`: that is a Tailwind utility the landing page uses. */
+.tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 14px;
