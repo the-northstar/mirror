@@ -258,3 +258,78 @@ export function summariseOrders(orders: Order[]): Finance {
     ),
   }
 }
+
+/* -- Catalogue statistics ------------------------------------------------ */
+
+export interface CatalogueStats {
+  count: number
+  /** Photos we host vs. photos pointing at someone else's server. */
+  uploaded: number
+  linked: number
+  /** Rows that would be ordered at zero, because orders re-price server-side. */
+  unpriced: number
+  averagePrice: number
+  byAisle: Array<{ aisle: string; count: number }>
+}
+
+/**
+ * What is actually on the shelves.
+ *
+ * `unpriced` is called out rather than averaged away: placing an order prices
+ * each line from the product, so a row without a price sells for nothing.
+ */
+export function summariseCatalogue(
+  products: Array<Pick<Product, 'aisle' | 'image' | 'price'>>,
+): CatalogueStats {
+  const priced = products.filter((p) => typeof p.price === 'number' && p.price > 0)
+  const byAisle = new Map<string, number>()
+  for (const p of products) byAisle.set(p.aisle, (byAisle.get(p.aisle) ?? 0) + 1)
+
+  return {
+    count: products.length,
+    uploaded: products.filter((p) => p.image?.startsWith('/uploads/')).length,
+    linked: products.filter((p) => !p.image?.startsWith('/uploads/')).length,
+    unpriced: products.length - priced.length,
+    averagePrice: priced.length
+      ? Math.round((priced.reduce((sum, p) => sum + (p.price ?? 0), 0) / priced.length) * 100) / 100
+      : 0,
+    byAisle: [...byAisle.entries()]
+      .map(([aisle, count]) => ({ aisle, count }))
+      .sort((a, b) => b.count - a.count || a.aisle.localeCompare(b.aisle)),
+  }
+}
+
+/* -- Trend --------------------------------------------------------------- */
+
+export interface DayPoint {
+  /** ISO date, so the chart's x-axis sorts as a string. */
+  day: string
+  revenue: number
+  orders: number
+}
+
+/**
+ * Revenue per day, including the days nothing sold.
+ *
+ * Gaps matter on a trend line: dropping empty days would draw a flat, healthy
+ * looking chart out of two sales a fortnight apart. `now` is a parameter so
+ * the series is testable rather than dependent on the clock.
+ */
+export function salesByDay(orders: Order[], days = 14, now = Date.now()): DayPoint[] {
+  const key = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+  const buckets = new Map<string, DayPoint>()
+
+  const DAY = 24 * 60 * 60 * 1000
+  for (let i = days - 1; i >= 0; i--) {
+    const day = key(now - i * DAY)
+    buckets.set(day, { day, revenue: 0, orders: 0 })
+  }
+
+  for (const o of orders) {
+    const hit = buckets.get(key(o.at))
+    if (!hit) continue // older than the window
+    hit.revenue = Math.round((hit.revenue + o.total) * 100) / 100
+    hit.orders += 1
+  }
+  return [...buckets.values()]
+}

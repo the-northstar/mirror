@@ -46,6 +46,16 @@ interface Shop {
 
 type Screen = 'land' | 'scanning' | 'diagnosis' | 'shop' | 'cart' | 'store'
 
+/** What the bag remembers about a line, so it survives a reload on its own. */
+interface CartLine {
+  id: string
+  name: string
+  brand: string
+  hex: string
+  shadeName?: string
+  price?: number
+}
+
 const AISLES = [
   { key: 'foundation', label: 'Foundation' },
   { key: 'lipstick', label: 'Lipstick' },
@@ -108,6 +118,7 @@ export default function App() {
   const [photo, setPhoto] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
+  const [cartLines, setCartLines] = useState<Record<string, CartLine>>({})
   const [scans, setScans] = useState<PastScan[]>([])
   const [shooting, setShooting] = useState(false)
 
@@ -116,11 +127,19 @@ export default function App() {
   useEffect(() => {
     const raw = localStorage.getItem('mirror.cart')
     if (raw) setCart(JSON.parse(raw))
+    const savedLines = localStorage.getItem('mirror.cart.lines')
+    if (savedLines) setCartLines(JSON.parse(savedLines))
     setScans(loadScans())
   }, [])
   useEffect(() => {
     localStorage.setItem('mirror.cart', JSON.stringify(cart))
   }, [cart])
+  // The bag keeps its own copy of each line: the prescription is recomputed on
+  // restore, so without this a refresh on /bag leaves ids with nothing to
+  // match against and the bag looks empty.
+  useEffect(() => {
+    localStorage.setItem('mirror.cart.lines', JSON.stringify(cartLines))
+  }, [cartLines])
 
   const scan = useCallback(async (picked: File) => {
     setScreen('scanning')
@@ -303,6 +322,11 @@ export default function App() {
           />
         ))}
       {screen === 'scanning' && <Scanning photo={photo} />}
+      {/* A reload lands here with no reading in memory. Without this the screen
+          renders nothing at all and the page just goes white. */}
+      {(screen === 'diagnosis' || screen === 'shop') && !reading && (
+        <NoReading scans={scans} onReopen={reopen} onStart={() => setScreen('land')} />
+      )}
       {screen === 'diagnosis' && reading && (
         <Diagnosis reading={reading} photo={photo} onShop={openShop} />
       )}
@@ -310,12 +334,30 @@ export default function App() {
         <ShopView
           shop={shop}
           reading={reading}
-          onAdd={(id) => setCart((c) => ({ ...c, [id]: (c[id] ?? 0) + 1 }))}
+          onAdd={(id) => {
+            setCart((c) => ({ ...c, [id]: (c[id] ?? 0) + 1 }))
+            const p = Object.values(shop?.shortlists ?? {})
+              .flat()
+              .find((x) => x.id === id)
+            if (p) {
+              setCartLines((l) => ({
+                ...l,
+                [id]: {
+                  id,
+                  name: p.name,
+                  brand: p.brand,
+                  hex: p.hex,
+                  shadeName: p.shadeName,
+                  price: p.price,
+                },
+              }))
+            }
+          }}
         />
       )}
       {screen === 'store' && <Store />}
       {screen === 'cart' && (
-        <Cart cart={cart} shop={shop} onChange={setCart} />
+        <Cart cart={cart} lines={cartLines} shop={shop} onChange={setCart} />
       )}
     </div>
   )
@@ -846,19 +888,76 @@ function decode(s: string): string {
 
 function Cart({
   cart,
+  lines: saved,
   shop,
   onChange,
 }: {
   cart: Record<string, number>
+  lines: Record<string, CartLine>
   shop: Shop | null
   onChange: (c: Record<string, number>) => void
 }) {
+  const [placing, setPlacing] = useState(false)
+  const [placed, setPlaced] = useState<Array<{ storeId: string; total: number }> | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  // The live shelf is preferred when it is loaded, but the bag's own snapshot
+  // is what makes a reload on /bag work at all.
   const all = shop ? Object.values(shop.shortlists).flat() : []
   const lines = Object.entries(cart)
-    .map(([id, qty]) => ({ product: all.find((p) => p.id === id), qty, id }))
+    .map(([id, qty]) => ({ product: all.find((p) => p.id === id) ?? saved[id], qty, id }))
     .filter((l) => l.product)
 
   const total = lines.reduce((sum, l) => sum + (l.product!.price ?? 0) * l.qty, 0)
+
+  const checkout = async () => {
+    setPlacing(true)
+    setErr(null)
+    setNote(null)
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lines: lines.map((l) => ({ productId: l.id, qty: l.qty })),
+        }),
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(body?.error ?? 'Checkout failed.')
+      const orders: Array<{ storeId: string; total: number }> = body.orders ?? []
+      setPlaced(orders)
+      if (orders.length === 0) {
+        // Nothing here belongs to a merchant, so nothing was sent. That is a
+        // normal outcome for feed-only picks, not a failure.
+        setNote('None of these are sold by a listed store yet, so no order was sent.')
+      } else {
+        onChange({})
+      }
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setPlacing(false)
+    }
+  }
+
+  if (placed && placed.length > 0) {
+    return (
+      <main className="wrap">
+        <div className="card empty">
+          <h3>
+            {placed.length === 1
+              ? 'Order sent'
+              : `${placed.length} orders sent`}
+          </h3>
+          <p className="tiny">
+            {placed.length === 1 ? 'One store' : `${placed.length} stores`} received your
+            order. They can see it in their Store dashboard.
+          </p>
+        </div>
+      </main>
+    )
+  }
 
   if (lines.length === 0) {
     return (
@@ -905,6 +1004,19 @@ function Cart({
         <span>Total</span>
         <strong className="num">${total.toFixed(2)}</strong>
       </div>
+      <button className="btn" onClick={checkout} disabled={placing}>
+        {placing ? 'Sending…' : 'Place order'}
+      </button>
+      {note && (
+        <p className="notice wrap" role="status">
+          {note}
+        </p>
+      )}
+      {err && (
+        <p className="notice notice-error wrap" role="alert">
+          {err}
+        </p>
+      )}
       <p className="tiny">
         Checkout sends ids and quantities only; every line is re-priced on the
         server.

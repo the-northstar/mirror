@@ -28,9 +28,12 @@ function mk(id: string, brand: string, L: number, a: number, b: number): Product
 describe('foundation ranking', () => {
   const deepSkin = '#3a2a20'
 
-  test('returns 12 shades for a deep reading', () => {
+  test('returns the whole distinct shelf for a deep reading', () => {
+    // No longer capped at 12: the shopper browses everything and the UI
+    // paginates. What matters is that nothing distinct is thrown away.
     const out = rankFoundation(shades(), deepSkin)
-    expect(out.length).toBe(SHORTLIST)
+    expect(out.length).toBeGreaterThan(12)
+    expect(out.length).toBeLessThanOrEqual(SHORTLIST)
   })
 
   test('every returned shade is visibly DISTINCT', () => {
@@ -46,7 +49,9 @@ describe('foundation ranking', () => {
 
   test('one dense brand cannot take every slot', () => {
     const out = rankFoundation(shades(), deepSkin)
-    const dense = out.filter((p) => p.brand === 'DenseBrand').length
+    // The cap orders the shelf rather than truncating it, so the dense brand
+    // must not take the opening slots.
+    const dense = out.slice(0, 12).filter((p) => p.brand === 'DenseBrand').length
     expect(dense).toBeLessThanOrEqual(4)
     expect(new Set(out.map((p) => p.brand)).size).toBeGreaterThan(1)
   })

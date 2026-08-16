@@ -518,12 +518,8 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     }
     const placed = placeOrder(lines)
     if (placed.length) await persistOrders()
-    if (placed.length === 0) {
-      return json(
-        { error: 'Nothing in your bag can be ordered yet. Only store-listed items ship.' },
-        400,
-      )
-    }
+    // An empty result is a real outcome, not an error: a bag of feed-only picks
+    // has no merchant to send to, so it places zero orders and says so.
     return json({ orders: placed })
   },
 

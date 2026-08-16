@@ -1544,3 +1544,37 @@
   margin-top: 6px;
   min-width: 220px;
 }
+/* Store charts ---------------------------------------------------------- */
+.chart {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.columns {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 120px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.column {
+  flex: 1;
+  /* A quiet day is drawn as a visible stub, not a hairline: an invisible bar
+     reads as missing data rather than as a day with no sales. */
+  min-height: 5px;
+  border-radius: 3px 3px 0 0;
+  background: rgb(22 26 23 / 0.16);
+}
+
+.column.on {
+  background: var(--ink);
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+}
+

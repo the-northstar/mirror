@@ -364,6 +364,15 @@ export function faultOf(code: string): {
   const shopper = SHOPPER_OWNED[code]
   if (shopper) return { owner: 'shopper', message: shopper }
 
+  // Uploads expire. The task then fails with an opaque internal error, which
+  // is the shop's fault to recover from but the shopper's to act on: her photo
+  // has to be sent again.
+  if (code === 'unknown_internal_error' || code === 'InvalidFileId') {
+    return {
+      owner: 'shopper',
+      message: 'That photo has expired. Scan again to keep trying things on.',
+    }
+  }
   if (code === 'CreditInsufficiency') {
     return {
       owner: 'shop',
