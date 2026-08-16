@@ -21,6 +21,8 @@ import {
   AISLES,
   COLUMNS,
   GARMENT_CATEGORIES,
+  salesByDay,
+  summariseCatalogue,
   type Finance,
   type OwnerProduct,
 } from './lib/products'
@@ -84,6 +86,7 @@ function Owner() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imported, setImported] = useState<string | null>(null)
+  const [tab, setTab] = useState<'products' | 'orders' | 'finance'>('products')
   const [orders, setOrders] = useState<Order[]>([])
   const [finance, setFinance] = useState<Finance | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -195,6 +198,9 @@ function Owner() {
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
 
   const mine = listed.filter((p) => p.mine)
+  const stats = summariseCatalogue(mine)
+  const trend = salesByDay(orders)
+  const peak = Math.max(1, ...trend.map((d) => d.revenue))
 
   return (
     <main className="wrap stack">
@@ -208,298 +214,452 @@ function Owner() {
         <UserButton />
       </section>
 
-      <section className="card stack">
-        <h3>Import a spreadsheet</h3>
-        <p className="tiny">
-          An .xlsx or .csv with a header row. Columns: {COLUMNS.join(', ')} —
-          <strong> name</strong>, <strong>hex</strong> and <strong>image</strong>{' '}
-          are required, the rest optional. Order does not matter.
-        </p>
-        <div className="actions">
+      <nav className="aisles" aria-label="Store sections">
+        {(
+          [
+            ['products', `Products (${mine.length})`],
+            ['orders', `Orders (${orders.length})`],
+            ['finance', 'Finance'],
+          ] as const
+        ).map(([id, label]) => (
           <button
-            type="button"
-            className="btn"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
+            key={id}
+            className={tab === id ? 'aisle on' : 'aisle'}
+            aria-current={tab === id}
+            onClick={() => setTab(id)}
           >
-            Choose file
+            {label}
           </button>
-          <a className="btn btn-quiet" href={templateHref()} download="products.csv">
-            Download template
-          </a>
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xlsx,.xls,.csv,text/csv"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) importSheet(f)
-            e.target.value = ''
-          }}
-        />
-        {imported && <p className="notice">{imported}</p>}
-      </section>
+        ))}
+      </nav>
 
-      <form className="stack" onSubmit={submit}>
-        {rows.map((row, i) => (
-          <fieldset key={i} className="card stack form">
-            <legend className="row-head">
-              <h3>Add one{rows.length > 1 ? ` (${i + 1})` : ''}</h3>
-              {rows.length > 1 && (
-                <button
-                  type="button"
-                  className="textlink"
-                  onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-                >
-                  Remove row
-                </button>
-              )}
-            </legend>
+      {error && (
+        <p className="notice notice-error" role="alert">
+          {error}
+        </p>
+      )}
 
-            <div className="field-grid">
-              <label>
-                Name
-                <input
-                  value={row.name}
-                  onChange={(e) => set(i, 'name', e.target.value)}
-                  placeholder="Petrol overshirt"
-                  required
-                />
-              </label>
+      {tab === 'products' && (
+        <>
+          <section className="stack">
+            <h3>Your catalogue</h3>
+            <div className="books">
+              <div className="figure">
+                <strong>{stats.count}</strong>
+                <span className="tiny">Listed</span>
+              </div>
+              <div className="figure">
+                <strong>{money(stats.averagePrice)}</strong>
+                <span className="tiny">Average price</span>
+              </div>
+              <div className="figure">
+                <strong>{stats.uploaded}</strong>
+                <span className="tiny">Photos hosted here</span>
+              </div>
+              <div className="figure">
+                <strong>{stats.unpriced}</strong>
+                <span className="tiny">Missing a price</span>
+              </div>
+            </div>
+            {stats.unpriced > 0 && (
+              <p className="notice">
+                {stats.unpriced} product{stats.unpriced === 1 ? '' : 's'} have no
+                price. Orders are priced from the product, so those sell for
+                nothing until you set one.
+              </p>
+            )}
+            {stats.byAisle.length > 1 && (
+              <ul className="bars">
+                {stats.byAisle.map((a) => (
+                  <li key={a.aisle}>
+                    <span className="cap">{a.aisle}</span>
+                    <span className="meter" aria-hidden>
+                      <span
+                        style={{ width: `${Math.round((a.count / stats.byAisle[0].count) * 100)}%` }}
+                      />
+                    </span>
+                    <span className="num">{a.count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        <section className="card stack">
+          <h3>Import a spreadsheet</h3>
+          <p className="tiny">
+            An .xlsx or .csv with a header row. Columns: {COLUMNS.join(', ')} —
+            <strong> name</strong>, <strong>hex</strong> and <strong>image</strong>{' '}
+            are required, the rest optional. Order does not matter.
+          </p>
+          <div className="actions">
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              Choose file
+            </button>
+            <a className="btn btn-quiet" href={templateHref()} download="products.csv">
+              Download template
+            </a>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,text/csv"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) importSheet(f)
+              e.target.value = ''
+            }}
+          />
+          {imported && <p className="notice">{imported}</p>}
+        </section>
 
-              <label>
-                Brand
-                <input
-                  value={row.brand}
-                  onChange={(e) => set(i, 'brand', e.target.value)}
-                  placeholder="Your store"
-                />
-              </label>
-
-              <label>
-                Aisle
-                <select
-                  value={row.aisle}
-                  onChange={(e) => set(i, 'aisle', e.target.value)}
-                >
-                  {AISLES.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {row.aisle === 'clothes' && (
-                <label>
-                  Worn as
-                  <select
-                    value={row.garmentCategory}
-                    onChange={(e) => set(i, 'garmentCategory', e.target.value)}
+        <form className="stack" onSubmit={submit}>
+          {rows.map((row, i) => (
+            <fieldset key={i} className="card stack form">
+              <legend className="row-head">
+                <h3>Add one{rows.length > 1 ? ` (${i + 1})` : ''}</h3>
+                {rows.length > 1 && (
+                  <button
+                    type="button"
+                    className="textlink"
+                    onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
                   >
-                    {GARMENT_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c.replace('_', ' ')}
+                    Remove row
+                  </button>
+                )}
+              </legend>
+
+              <div className="field-grid">
+                <label>
+                  Name
+                  <input
+                    value={row.name}
+                    onChange={(e) => set(i, 'name', e.target.value)}
+                    placeholder="Petrol overshirt"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Brand
+                  <input
+                    value={row.brand}
+                    onChange={(e) => set(i, 'brand', e.target.value)}
+                    placeholder="Your store"
+                  />
+                </label>
+
+                <label>
+                  Aisle
+                  <select
+                    value={row.aisle}
+                    onChange={(e) => set(i, 'aisle', e.target.value)}
+                  >
+                    {AISLES.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
                       </option>
                     ))}
                   </select>
-                  <span className="tiny">
-                    Guessed from the photo unless you say. A dress set to a top
-                    renders as a top.
-                  </span>
                 </label>
-              )}
 
-              <label>
-                Price
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={row.price}
-                  onChange={(e) => set(i, 'price', e.target.value)}
-                  placeholder="89"
-                />
-              </label>
-              <label className="span-2">
-                Photo
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  required
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null
-                    if (row.preview) URL.revokeObjectURL(row.preview)
-                    set(i, 'photo', f)
-                    set(i, 'preview', f ? URL.createObjectURL(f) : '')
-                  }}
-                />
-                <span className="tiny">
-                  A flat-lay on white renders best. Uploaded here, then served
-                  from this site so YouCam can fetch it.
-                </span>
-                {row.preview && (
-                  <img className="photo-preview" src={row.preview} alt="" />
+                {row.aisle === 'clothes' && (
+                  <label>
+                    Worn as
+                    <select
+                      value={row.garmentCategory}
+                      onChange={(e) => set(i, 'garmentCategory', e.target.value)}
+                    >
+                      {GARMENT_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c.replace('_', ' ')}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="tiny">
+                      Guessed from the photo unless you say. A dress set to a top
+                      renders as a top.
+                    </span>
+                  </label>
                 )}
-              </label>
 
-              <label className="span-2">
-                Colour
-                <span className="colorrow">
+                <label>
+                  Price
                   <input
-                    type="color"
-                    value={row.hex}
-                    onChange={(e) => set(i, 'hex', e.target.value)}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={row.price}
+                    onChange={(e) => set(i, 'price', e.target.value)}
+                    placeholder="89"
+                  />
+                </label>
+                <label className="span-2">
+                  Photo
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    required
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null
+                      if (row.preview) URL.revokeObjectURL(row.preview)
+                      set(i, 'photo', f)
+                      set(i, 'preview', f ? URL.createObjectURL(f) : '')
+                    }}
                   />
                   <span className="tiny">
-                    What the shopper's palette is matched against. Rows without a
-                    colour cannot be ranked.
+                    A flat-lay on white renders best. Uploaded here, then served
+                    from this site so YouCam can fetch it.
                   </span>
-                </span>
-              </label>
-            </div>
+                  {row.preview && (
+                    <img className="photo-preview" src={row.preview} alt="" />
+                  )}
+                </label>
 
-            {rowErrors[i] && (
-              <p className="notice notice-error" role="alert">
-                {rowErrors[i]}
-              </p>
-            )}
-          </fieldset>
-        ))}
+                <label className="span-2">
+                  Colour
+                  <span className="colorrow">
+                    <input
+                      type="color"
+                      value={row.hex}
+                      onChange={(e) => set(i, 'hex', e.target.value)}
+                    />
+                    <span className="tiny">
+                      What the shopper's palette is matched against. Rows without a
+                      colour cannot be ranked.
+                    </span>
+                  </span>
+                </label>
+              </div>
 
-        {error && (
-          <p className="notice notice-error" role="alert">
-            {error}
-          </p>
-        )}
-        {rowErrors.length > rows.length &&
-          rowErrors.slice(rows.length).map((m) => (
-            <p key={m} className="notice notice-error" role="alert">
-              {m}
-            </p>
+              {rowErrors[i] && (
+                <p className="notice notice-error" role="alert">
+                  {rowErrors[i]}
+                </p>
+              )}
+            </fieldset>
           ))}
 
-        <div className="actions">
-          <button
-            type="button"
-            className="btn btn-quiet"
-            onClick={() => setRows((rs) => [...rs, BLANK])}
-          >
-            + Another
-          </button>
-          <button className="btn" disabled={busy}>
-            {busy ? 'Saving…' : rows.length > 1 ? `Add ${rows.length}` : 'Add product'}
-          </button>
-        </div>
-      </form>
+          {error && (
+            <p className="notice notice-error" role="alert">
+              {error}
+            </p>
+          )}
+          {rowErrors.length > rows.length &&
+            rowErrors.slice(rows.length).map((m) => (
+              <p key={m} className="notice notice-error" role="alert">
+                {m}
+              </p>
+            ))}
 
-      <section className="stack">
-        <h3>Sales</h3>
-        {!finance || finance.orders === 0 ? (
-          <p className="tiny">
-            No orders yet. They appear here the moment a shopper checks out.
-          </p>
-        ) : (
-          <>
-            <div className="books">
-              <div className="figure">
-                <strong>{money(finance.revenue)}</strong>
-                <span className="tiny">Revenue</span>
-              </div>
-              <div className="figure">
-                <strong>{finance.orders}</strong>
-                <span className="tiny">Order{finance.orders === 1 ? '' : 's'}</span>
-              </div>
-              <div className="figure">
-                <strong>{finance.units}</strong>
-                <span className="tiny">Item{finance.units === 1 ? '' : 's'} sold</span>
-              </div>
-              <div className="figure">
-                <strong>{money(finance.revenue / finance.orders)}</strong>
-                <span className="tiny">Average order</span>
-              </div>
+          <div className="actions">
+            <button
+              type="button"
+              className="btn btn-quiet"
+              onClick={() => setRows((rs) => [...rs, BLANK])}
+            >
+              + Another
+            </button>
+            <button className="btn" disabled={busy}>
+              {busy ? 'Saving…' : rows.length > 1 ? `Add ${rows.length}` : 'Add product'}
+            </button>
+          </div>
+        </form>
+        <section className="stack">
+          <h3>On your shelves ({mine.length})</h3>
+          {mine.length === 0 ? (
+            <p className="tiny">
+              Nothing yet. Add one above, or import a spreadsheet.
+            </p>
+          ) : (
+            <div className="tile-grid">
+              {mine.map((p) => (
+                <figure key={p.id} className="tile">
+                  <img src={p.image} alt="" loading="lazy" />
+                  <figcaption>
+                    <strong>{p.name}</strong>
+                    <span className="tiny">
+                      <i className="dot" style={{ background: p.hex }} />
+                      {p.colorName} · {p.aisle}
+                      {p.price ? ` · $${p.price}` : ''}
+                    </span>
+                    <button className="textlink" onClick={() => remove(p.id)}>
+                      Remove
+                    </button>
+                  </figcaption>
+                </figure>
+              ))}
             </div>
+          )}
+        </section>
+        </>
+      )}
 
-            <table className="ledger">
-              <caption className="tiny">
-                Best seller first. Revenue is what was charged at the time, not
-                today's price.
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Product</th>
-                  <th scope="col">Units</th>
-                  <th scope="col">Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {finance.byProduct.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.name}</td>
-                    <td>{p.units}</td>
-                    <td>{money(p.revenue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {tab === 'orders' && (
+        <section className="stack">
+          <h3>Orders</h3>
+          {!finance || finance.orders === 0 ? (
+            <p className="tiny">
+              No orders yet. They appear here the moment a shopper checks out.
+            </p>
+          ) : (
+            <>
+              <div className="books">
+                <div className="figure">
+                  <strong>{finance.orders}</strong>
+                  <span className="tiny">Orders</span>
+                </div>
+                <div className="figure">
+                  <strong>{finance.units}</strong>
+                  <span className="tiny">Items sold</span>
+                </div>
+                <div className="figure">
+                  <strong>{(finance.units / finance.orders).toFixed(1)}</strong>
+                  <span className="tiny">Items per order</span>
+                </div>
+                <div className="figure">
+                  <strong>
+                    {new Date(
+                      Math.max(...orders.map((o) => o.at)),
+                    ).toLocaleDateString()}
+                  </strong>
+                  <span className="tiny">Latest</span>
+                </div>
+              </div>
 
-            <h4>Recent orders</h4>
-            <ul className="orders">
-              {[...orders]
-                .sort((a, b) => b.at - a.at)
-                .slice(0, 10)
-                .map((o) => (
-                  <li key={o.id} className="card order">
-                    <div className="order-head">
-                      <strong>{o.id}</strong>
-                      <span className="tiny">{new Date(o.at).toLocaleString()}</span>
-                      <span className="order-total">{money(o.total)}</span>
-                    </div>
-                    <ul className="tiny">
-                      {o.lines.map((l) => (
-                        <li key={l.product.id}>
-                          {l.qty} × {l.product.name} @ {money(l.unitPrice)}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-            </ul>
+                <ul className="orders">
+                  {[...orders]
+                    .sort((a, b) => b.at - a.at)
+                    .slice(0, 10)
+                    .map((o) => (
+                      <li key={o.id} className="card order">
+                        <div className="order-head">
+                          <strong>{o.id}</strong>
+                          <span className="tiny">{new Date(o.at).toLocaleString()}</span>
+                          <span className="order-total">{money(o.total)}</span>
+                        </div>
+                        <ul className="tiny">
+                          {o.lines.map((l) => (
+                            <li key={l.product.id}>
+                              {l.qty} × {l.product.name} @ {money(l.unitPrice)}
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                </ul>
           </>
         )}
-      </section>
+        </section>
+      )}
 
-      <section className="stack">
-        <h3>On your shelves ({mine.length})</h3>
-        {mine.length === 0 ? (
-          <p className="tiny">
-            Nothing yet. Add one above, or import a spreadsheet.
-          </p>
-        ) : (
-          <div className="tile-grid">
-            {mine.map((p) => (
-              <figure key={p.id} className="tile">
-                <img src={p.image} alt="" loading="lazy" />
-                <figcaption>
-                  <strong>{p.name}</strong>
-                  <span className="tiny">
-                    <i className="dot" style={{ background: p.hex }} />
-                    {p.colorName} · {p.aisle}
-                    {p.price ? ` · $${p.price}` : ''}
+      {tab === 'finance' && (
+        <section className="stack">
+          <h3>Finance</h3>
+
+          <figure className="chart">
+            <figcaption className="tiny">
+              Revenue, last 14 days. Quiet days are drawn, not skipped.
+            </figcaption>
+            <div className="columns" role="img" aria-label={trendLabel(trend)}>
+              {trend.map((d) => (
+                <span
+                  key={d.day}
+                  className={d.revenue ? 'column on' : 'column'}
+                  style={{ height: `${Math.round((d.revenue / peak) * 100)}%` }}
+                  title={`${d.day}: ${money(d.revenue)} from ${d.orders} order${d.orders === 1 ? '' : 's'}`}
+                />
+              ))}
+            </div>
+            <div className="axis tiny">
+              <span>{trend[0]?.day.slice(5)}</span>
+              <span>{money(peak)} peak</span>
+              <span>{trend.at(-1)?.day.slice(5)}</span>
+            </div>
+          </figure>
+          {!finance || finance.orders === 0 ? (
+            <p className="tiny">
+              No orders yet. They appear here the moment a shopper checks out.
+            </p>
+          ) : (
+            <>
+                <div className="books">
+                  <div className="figure">
+                    <strong>{money(finance.revenue)}</strong>
+                    <span className="tiny">Revenue</span>
+                  </div>
+                  <div className="figure">
+                    <strong>{finance.orders}</strong>
+                    <span className="tiny">Order{finance.orders === 1 ? '' : 's'}</span>
+                  </div>
+                  <div className="figure">
+                    <strong>{finance.units}</strong>
+                    <span className="tiny">Item{finance.units === 1 ? '' : 's'} sold</span>
+                  </div>
+                  <div className="figure">
+                    <strong>{money(finance.revenue / finance.orders)}</strong>
+                    <span className="tiny">Average order</span>
+                  </div>
+                </div>
+
+                <table className="ledger">
+                  <caption className="tiny">
+                    Best seller first. Revenue is what was charged at the time, not
+                    today's price.
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Product</th>
+                      <th scope="col">Units</th>
+                      <th scope="col">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {finance.byProduct.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.name}</td>
+                        <td>{p.units}</td>
+                        <td>{money(p.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+            <ul className="bars">
+              {finance.byProduct.slice(0, 6).map((p) => (
+                <li key={p.id}>
+                  <span>{p.name}</span>
+                  <span className="meter" aria-hidden>
+                    <span
+                      style={{
+                        width: `${Math.round((p.revenue / finance.byProduct[0].revenue) * 100)}%`,
+                      }}
+                    />
                   </span>
-                  <button className="textlink" onClick={() => remove(p.id)}>
-                    Remove
-                  </button>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
+                  <span className="num">{money(p.revenue)}</span>
+                </li>
+              ))}
+            </ul>
+
+          </>
         )}
-      </section>
+        </section>
+      )}
+
     </main>
   )
+}
+
+/** The chart is decorative to a screen reader without this. */
+const trendLabel = (trend: Array<{ day: string; revenue: number }>) => {
+  const total = trend.reduce((n, d) => n + d.revenue, 0)
+  const best = trend.reduce((a, b) => (b.revenue > a.revenue ? b : a), trend[0])
+  return `Revenue over ${trend.length} days, ${total.toFixed(2)} total, best day ${best?.day ?? 'none'}`
 }
 
 const money = (n: number) =>

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { normalizeProduct, parseCsv, rowsToProducts, summariseOrders } from './products.ts'
+import { normalizeProduct, parseCsv, rowsToProducts, salesByDay, summariseCatalogue, summariseOrders } from './products.ts'
 
 const OK = {
   name: 'Petrol Overshirt',
@@ -135,4 +135,53 @@ test('clothes carry a render category so a dress is not rendered as a shirt', ()
     normalizeProduct({ name: 'Balm', hex: '#2f5d62', image: 'https://a.test/b.png', aisle: 'lipstick' }, 'u')
       .garmentCategory,
   ).toBeUndefined()
+})
+
+test('catalogue stats separate hosted photos and flag unpriced rows', () => {
+  const s = summariseCatalogue([
+    { aisle: 'clothes', image: '/uploads/a.jpg', price: 100 },
+    { aisle: 'clothes', image: 'https://x.test/b.jpg', price: 50 },
+    // No price: orders re-price from the product, so this one would sell at 0.
+    { aisle: 'lipstick', image: '/uploads/c.jpg', price: undefined },
+  ] as never)
+
+  expect(s.count).toBe(3)
+  expect(s.uploaded).toBe(2)
+  expect(s.linked).toBe(1)
+  expect(s.unpriced).toBe(1)
+  // Averaged over priced rows only, or a missing price would drag it down.
+  expect(s.averagePrice).toBe(75)
+  expect(s.byAisle).toEqual([
+    { aisle: 'clothes', count: 2 },
+    { aisle: 'lipstick', count: 1 },
+  ])
+})
+
+test('an empty catalogue reports zeroes', () => {
+  expect(summariseCatalogue([])).toEqual({
+    count: 0, uploaded: 0, linked: 0, unpriced: 0, averagePrice: 0, byAisle: [],
+  })
+})
+
+const DAY = 24 * 60 * 60 * 1000
+const NOW = Date.parse('2026-08-16T12:00:00Z')
+
+test('the trend keeps empty days so a gap reads as a gap', () => {
+  const series = salesByDay(
+    [
+      { id: 'o1', at: NOW, storeId: 's', total: 100, lines: [] },
+      { id: 'o2', at: NOW, storeId: 's', total: 50, lines: [] },
+      { id: 'o3', at: NOW - 2 * DAY, storeId: 's', total: 20, lines: [] },
+      // Outside the window: counted nowhere rather than folded into day one.
+      { id: 'o4', at: NOW - 40 * DAY, storeId: 's', total: 999, lines: [] },
+    ] as never,
+    7,
+    NOW,
+  )
+
+  expect(series).toHaveLength(7)
+  expect(series.at(-1)).toEqual({ day: '2026-08-16', revenue: 150, orders: 2 })
+  expect(series.at(-3)).toEqual({ day: '2026-08-14', revenue: 20, orders: 1 })
+  expect(series.at(-2)).toEqual({ day: '2026-08-15', revenue: 0, orders: 0 })
+  expect(series.reduce((n, d) => n + d.revenue, 0)).toBe(170)
 })
