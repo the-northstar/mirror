@@ -112,6 +112,34 @@ describe('score inversion', () => {
 })
 
 describe('formula', () => {
+  test('the reason never contradicts the finish it explains', () => {
+    // Live bug: reading oiliness alone printed "Matte finish, because your
+    // skin reads oily (51%)" on a face this same call prescribed NATURAL,
+    // because dryness pulled the other way and the sentence never heard about
+    // it. A prescription that argues against its own output discredits both.
+    const both = formulaFor([
+      { type: 'oiliness', ui_score: 49, raw_score: 49 }, // 51% oily
+      { type: 'moisture', ui_score: 45, raw_score: 45 }, // 55% dry
+    ])
+    expect(both.finish).toBe('natural')
+    for (const b of both.because) {
+      if (b.startsWith('Matte finish')) throw new Error(`claims matte: ${b}`)
+      if (b.startsWith('Extra glow')) throw new Error(`claims dewy: ${b}`)
+    }
+    // And it explains the balance rather than going quiet about it.
+    expect(both.because.some((b) => b.startsWith('Balanced finish'))).toBe(true)
+  })
+
+  test('a one-sided reading still says which way it went', () => {
+    const oily = formulaFor([{ type: 'oiliness', ui_score: 10, raw_score: 10 }])
+    expect(oily.finish).toBe('matte')
+    expect(oily.because.some((b) => b.startsWith('Matte finish'))).toBe(true)
+
+    const dry = formulaFor([{ type: 'moisture', ui_score: 10, raw_score: 10 }])
+    expect(dry.finish).toBe('dewy')
+    expect(dry.because.some((b) => b.startsWith('Extra glow'))).toBe(true)
+  })
+
   test('near-perfect live skin yields no invented findings', () => {
     const f = formulaFor(LIVE_CONCERNS)
     // Nothing is pronounced on this face, so it must not claim anything.

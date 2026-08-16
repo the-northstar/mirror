@@ -88,10 +88,23 @@ export function formulaFor(rows: ConcernRow[]): Formula {
   const glow = clamp(
     0.5 - (oily ?? 0) * 0.45 + (dry ?? 0) * 0.45,
   )
-  if (oily !== null && oily > 0.35) {
-    because.push(`Matte finish, because your skin reads oily (${pct(oily)}).`)
-  } else if (dry !== null && dry > 0.35) {
-    because.push(`Extra glow, because your skin reads dry (${pct(dry)}).`)
+  const finish = glow < 0.35 ? 'matte' : glow > 0.58 ? 'dewy' : 'natural'
+
+  // The sentence is worded from the FINISH, not from the raw signal that fed
+  // it. Reading oiliness alone printed "Matte finish, because your skin reads
+  // oily" on a face the same function had just prescribed a NATURAL base —
+  // because dryness pulled the other way and the sentence never heard about
+  // it. A prescription that contradicts its own reason discredits both.
+  const oilySpeaks = oily !== null && oily > 0.35
+  const drySpeaks = dry !== null && dry > 0.35
+  if (oilySpeaks && drySpeaks && finish === 'natural') {
+    because.push(
+      `Balanced finish: your skin reads both oily (${pct(oily!)}) and dry (${pct(dry!)}), which pull opposite ways.`,
+    )
+  } else if (finish === 'matte' && oilySpeaks) {
+    because.push(`Matte finish, because your skin reads oily (${pct(oily!)}).`)
+  } else if (finish === 'dewy' && drySpeaks) {
+    because.push(`Extra glow, because your skin reads dry (${pct(dry!)}).`)
   }
 
   // Coverage: redness, blemishes and texture all ask for more.
@@ -104,7 +117,10 @@ export function formulaFor(rows: ConcernRow[]): Formula {
   const worst = pickWorst({ redness: red, acne, texture, pore })
   if (worst) {
     because.push(
-      `${coverage > 0.6 ? 'Fuller' : 'Light'} coverage, because ${LABEL[worst.type]} is your most pronounced reading (${pct(worst.value)}).`,
+      // Scoped: pickWorst only weighs the four concerns that drive coverage,
+      // so calling it "your most pronounced reading" contradicts the profile,
+      // which ranks all seven. Both were true and the pair read as a mistake.
+      `${coverage > 0.6 ? 'Fuller' : 'Light'} coverage, because ${LABEL[worst.type]} is the most pronounced of the readings that affect coverage (${pct(worst.value)}).`,
     )
   }
 
@@ -118,7 +134,7 @@ export function formulaFor(rows: ConcernRow[]): Formula {
     glowIntensity: round(glow),
     coverageIntensity: round(coverage),
     colorUnderEyeIntensity: round(underEye),
-    finish: glow < 0.35 ? 'matte' : glow > 0.58 ? 'dewy' : 'natural',
+    finish,
     because,
   }
 }
