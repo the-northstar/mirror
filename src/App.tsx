@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Camera } from './Camera'
 import { Studio } from './Studio'
-import { fileToDataUrl, loadScans, relativeTime, removeScan, saveScan, type PastScan } from './lib/history'
+import { Landing } from './landing/Landing'
+import { fileToDataUrl, loadScans, removeScan, saveScan, type PastScan } from './lib/history'
 import './App.css'
 
 /* -- Types mirroring the API ------------------------------------------- */
@@ -75,6 +76,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
   const [scans, setScans] = useState<PastScan[]>([])
+  const [shooting, setShooting] = useState(false)
 
   // One key per module. The prescription is deliberately NOT persisted: the
   // shelf may have changed underneath it, so it is recomputed on restore.
@@ -157,38 +159,67 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="bar">
-        <button className="brand" onClick={() => setScreen(reading ? 'diagnosis' : 'land')}>
+      {/* On the landing the bar is part of the page: no rule, no fill, the
+          landing's own type. Inside the app it becomes a real sticky chrome. */}
+      <header className={screen === 'land' ? 'bar bar-land' : 'bar'}>
+        <button
+          className="brand"
+          onClick={() => setScreen(reading ? 'diagnosis' : 'land')}
+          aria-label="Mirror, back to start"
+        >
           <span className="brand-mark" aria-hidden />
-          Mirror
+          <span className="brand-word">Mirror</span>
         </button>
 
-        {reading && (
+        {reading ? (
           <nav className="bar-nav" aria-label="Main">
             <button
               className={screen === 'diagnosis' ? 'navlink on' : 'navlink'}
-              aria-current={screen === 'diagnosis'}
+              aria-current={screen === 'diagnosis' ? 'page' : undefined}
               onClick={() => setScreen('diagnosis')}
             >
               Diagnosis
             </button>
             <button
               className={screen === 'shop' ? 'navlink on' : 'navlink'}
-              aria-current={screen === 'shop'}
+              aria-current={screen === 'shop' ? 'page' : undefined}
               onClick={openShop}
             >
               Studio
             </button>
           </nav>
+        ) : (
+          <span className="bar-tag">instrument for skin · built on YouCam</span>
         )}
 
-        <button
-          className="cart-btn"
-          onClick={() => setScreen('cart')}
-          aria-label={`Bag, ${count} item${count === 1 ? '' : 's'}`}
-        >
-          Bag{count > 0 && <span className="pip">{count}</span>}
-        </button>
+        {/* Nothing can be in the bag before a scan, so it stays out of the
+            landing entirely rather than sitting there empty. */}
+        {screen !== 'land' && (
+          <button
+            className={count > 0 ? 'cart-btn has-items' : 'cart-btn'}
+            onClick={() => setScreen('cart')}
+            aria-label={`Bag, ${count} item${count === 1 ? '' : 's'}`}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden focusable="false">
+              <path
+                d="M6 8h12l-1 11.5a1.5 1.5 0 0 1-1.5 1.4h-9A1.5 1.5 0 0 1 5 19.5z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M9 9.5V7a3 3 0 0 1 6 0v2.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="cart-label">Bag</span>
+            {count > 0 && <span className="pip">{count}</span>}
+          </button>
+        )}
       </header>
 
       {error && (
@@ -197,14 +228,25 @@ export default function App() {
         </p>
       )}
 
-      {screen === 'land' && (
-        <Land
-          onFile={scan}
-          scans={scans}
-          onReopen={reopen}
-          onForget={(id) => setScans(removeScan(id))}
-        />
-      )}
+      {screen === 'land' &&
+        (shooting ? (
+          <Camera
+            mode="face"
+            onCancel={() => setShooting(false)}
+            onCapture={(f) => {
+              setShooting(false)
+              scan(f)
+            }}
+          />
+        ) : (
+          <Landing
+            onCamera={() => setShooting(true)}
+            onFile={scan}
+            scans={scans}
+            onReopen={reopen}
+            onForget={(id) => setScans(removeScan(id))}
+          />
+        ))}
       {screen === 'scanning' && <Scanning photo={photo} />}
       {screen === 'diagnosis' && reading && (
         <Diagnosis reading={reading} photo={photo} onShop={openShop} />
@@ -221,115 +263,6 @@ export default function App() {
         <Cart cart={cart} shop={shop} onChange={setCart} />
       )}
     </div>
-  )
-}
-
-/* -- Land --------------------------------------------------------------- */
-
-function Land({
-  onFile,
-  scans,
-  onReopen,
-  onForget,
-}: {
-  onFile: (f: File) => void
-  scans: PastScan[]
-  onReopen: (s: PastScan) => void
-  onForget: (id: string) => void
-}) {
-  const [shooting, setShooting] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  if (shooting) {
-    return (
-      <Camera
-        mode="face"
-        onCancel={() => setShooting(false)}
-        onCapture={(f) => {
-          setShooting(false)
-          onFile(f)
-        }}
-      />
-    )
-  }
-
-  return (
-    <main className="wrap land">
-      <div className="land-copy">
-        <h1 className="display land-title">
-          Your skin sets
-          <br />
-          the formula.
-        </h1>
-        <p className="lead">
-          One selfie. We measure your skin colour and its condition, then every
-          product names the reading that chose it.
-        </p>
-        <p className="lead lead-2">
-          Colour picks the shade. Condition picks the formula. That is why the
-          same matched shade is prescribed matte on oily skin and dewy on dry.
-        </p>
-        <div className="land-actions">
-          <button className="btn" onClick={() => setShooting(true)}>
-            Open camera
-          </button>
-          <button className="btn btn-quiet" onClick={() => inputRef.current?.click()}>
-            Upload a photo
-          </button>
-        </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) onFile(f)
-            e.target.value = ''
-          }}
-        />
-        <ul className="guides">
-          <li>One person only, no one else in frame</li>
-          <li>Close up, your face filling most of the photo</li>
-          <li>Even light, facing the camera</li>
-        </ul>
-
-        {scans.length > 0 && (
-          <section className="history">
-            <h2 className="kicker">Your earlier scans</h2>
-            <p className="tiny">Re-open one to skip the scan. It costs nothing.</p>
-            <ul className="history-row">
-              {scans.map((s) => (
-                <li key={s.id}>
-                  <button className="history-item" onClick={() => onReopen(s)}>
-                    <img src={s.photo} alt="" />
-                    <span className="history-meta">
-                      <span className="history-season">{s.season}</span>
-                      <span className="tiny">{relativeTime(s.at)}</span>
-                    </span>
-                  </button>
-                  <button
-                    className="history-x"
-                    onClick={() => onForget(s.id)}
-                    aria-label="Forget this scan"
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
-      <aside className="land-aside" aria-hidden>
-        <div className="chip-row">
-          {['#3a2a20', '#6b4a35', '#b18d70', '#d9c9b0', '#efe6d2'].map((h) => (
-            <span key={h} className="tone" style={{ background: h }} />
-          ))}
-        </div>
-        <p className="tiny">Measured, not guessed.</p>
-      </aside>
-    </main>
   )
 }
 
