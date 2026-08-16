@@ -73,6 +73,9 @@ const AISLES = [
 const MAKEUP_AISLES = ['foundation', 'lipstick', 'blush']
 const RENDERABLE = [...MAKEUP_AISLES, 'clothes', 'hair', 'skincare', 'look']
 
+/** Renderable but not purchasable: these are inspiration, not stock. */
+const NOT_FOR_SALE = ['hair', 'look']
+
 const CONCERN_LABEL: Record<string, string> = {
   oiliness: 'Oiliness', moisture: 'Moisture', redness: 'Redness', acne: 'Acne',
   texture: 'Texture', pore: 'Pores', dark_circle_v2: 'Dark circles',
@@ -773,8 +776,10 @@ function ProductCard({
   makeupEffects: unknown[]
   photo?: string | null
 }) {
-  // Everything YouCam can render gets a button on its own card.
+  // Everything YouCam can render gets a try-on button.
   const canTryOn = RENDERABLE.includes(product.aisle)
+  // But not everything is for sale: nobody ships a haircut or a makeup look.
+  const canBuy = !NOT_FOR_SALE.includes(product.aisle)
 
   return (
     <article className={featured ? 'product featured' : 'product'}>
@@ -797,9 +802,11 @@ function ProductCard({
         {product.shadeName && <p className="tiny">{product.shadeName}</p>}
         <p className="why">{product.reason}</p>
         <div className="product-actions">
-          <button className="btn btn-sm" onClick={() => onAdd(product.id)}>
-            Add{product.price ? ` · $${product.price}` : ''}
-          </button>
+          {canBuy && (
+            <button className="btn btn-sm" onClick={() => onAdd(product.id)}>
+              Add{product.price ? ` · $${product.price}` : ''}
+            </button>
+          )}
           {canTryOn && (
             <TryOnButton
               fileId={reading.fileId}

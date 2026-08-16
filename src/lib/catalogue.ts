@@ -231,22 +231,57 @@ export async function loadSkincare(signal?: AbortSignal): Promise<Product[]> {
       }
       return products
         .filter((p) => p.image_front_url && p.product_name?.trim())
-        .map(
-          (p): Product => ({
-            id: `skin-${src.tag}-${p.code ?? slug(p.product_name!)}`,
+        .map((p): Product | null => {
+          const name = p.product_name!.trim()
+          // The category is a coarse label: Open Beauty Facts files nail
+          // polish remover under cleansers. Recommending that for acne is
+          // worse than recommending nothing, so anything that reads as a
+          // different product entirely is dropped.
+          if (NOT_SKINCARE.test(name)) return null
+          return {
+            id: `skin-${src.tag}-${p.code ?? slug(name)}`,
             aisle: 'skincare',
             brand: (p.brands ?? '').split(',')[0].trim() || 'Unbranded',
-            name: p.product_name!.trim(),
+            name,
             // Skincare ranks on what it treats, never on colour.
             hex: '#e8e4dd',
             colorName: 'neutral',
             image: p.image_front_url,
-            tags: [...src.treats],
-          }),
-        )
+            // Narrow the category's claim with what the name actually says,
+            // so a row only claims a concern the product plausibly targets.
+            tags: refineTreats(name, [...src.treats]),
+          }
+        })
+        .filter((p): p is Product => p !== null)
     }),
   )
   return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+}
+
+/** Filed under skincare by the data source, but plainly something else. */
+const NOT_SKINCARE =
+  /dissolvant|nail|vernis|parfum|perfume|deodor|déodor|shampo|shampoo|dentifrice|toothpaste|savon de marseille|lessive|hair spray|make.?up remover|démaquillant|lingette|wipe/i
+
+/** Words that evidence a specific concern, so a row stops claiming all of them. */
+const TREAT_HINTS: Array<[RegExp, string[]]> = [
+  [/acne|acné|imperfection|blemish|effaclar|purifying|anti-imperfection/i, ['acne', 'oiliness', 'pore']],
+  [/matif|matte|sébum|sebum|oil.?control|purif/i, ['oiliness', 'pore']],
+  [/hydrat|moistur|nourri|hyaluron|nutriti/i, ['moisture']],
+  [/apaisant|soothing|sensitiv|rougeur|redness|cica/i, ['redness']],
+  [/anti.?age|rides|wrinkle|retinol|fermet|lift/i, ['texture']],
+  [/eclat|éclat|radian|bright|vitamin.?c|glow/i, ['radiance', 'age_spot']],
+  [/exfoli|gommage|scrub|peeling|aha|bha/i, ['texture', 'pore']],
+]
+
+/**
+ * Prefer what the product name evidences over what its category implies.
+ *
+ * A category tells you where a product is filed; the name tells you what it
+ * claims to do. When the name says nothing, the category stands.
+ */
+function refineTreats(name: string, fromCategory: string[]): string[] {
+  const hits = TREAT_HINTS.filter(([re]) => re.test(name)).flatMap(([, t]) => t)
+  return hits.length ? [...new Set(hits)] : fromCategory
 }
 
 /**
