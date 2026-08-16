@@ -19,17 +19,6 @@ export interface Ranked extends Product {
   score: number
   /** Shopper-facing cause, naming the measurement that produced the pick. */
   reason: string
-  /**
-   * Does this actually clear the aisle's own bar?
-   *
-   * The shelf is ordered, not filtered — a shopper can scroll to a foundation
-   * 22 dE off her face, and should be able to. But "500 ranked" counted that
-   * one too, which made the number describe the CATALOGUE rather than her.
-   * Each ranker sets this where it already decides the reason, because the
-   * branch that says "this will read as a different colour on your face" is
-   * the same branch that knows it is not a recommendation.
-   */
-  recommended: boolean
 }
 
 /**
@@ -89,7 +78,6 @@ export function rankFoundation(products: Product[], skinHex: string): Ranked[] {
   return filled.map((p) => ({
     ...p,
     reason: whyFoundation(p.score, skinHex),
-    recommended: p.score < 5,
   }))
 }
 
@@ -272,9 +260,6 @@ export function rankClothes(products: Product[], shopper: Shopper): Ranked[] {
       reason: whyGarment({
         lch, weight, palette, near, undertone, contrast, amplifies, settles, redness, dL,
       }),
-      // Nothing to warn her about AND the palette actively favours it —
-      // "does not clash" is a low bar for a garment she is being shown.
-      recommended: amplifies <= 6 && contrast <= 8 && undertone <= 18 && score <= 0,
     }
   })
 
@@ -419,13 +404,6 @@ export function rankLipstick(products: Product[], shopper: Shopper): Ranked[] {
     const score = arc + side + payoff + chalky
 
     return { ...p, score,
-      // Clearing the gate is not the same as suiting her. Inside the wearable
-      // arc almost every lipstick passes — measured live, 493 of 500 — and a
-      // count that passes 99% is measuring "is this a lipstick", not "is this
-      // for you". So the shift has to land near its ideal, not merely inside
-      // the band, and the shade has to sit on her side of the arc.
-      recommended:
-        off <= 12 && !chalky && side <= 4 && (shift === null || (shift >= 18 && shift <= 40)),
       reason:
       off > 12
         ? `Outside the range of hues that read as lipstick on a face, so it is listed but not recommended.`
@@ -468,8 +446,6 @@ export function rankBlush(products: Product[], shopper: Shopper): Ranked[] {
     const score = arc + side + visibility
 
     return { ...p, score,
-      // Same rule: near the ideal lift, not merely visible.
-      recommended: arc <= 10 && side <= 4 && shift >= 14 && shift <= 34,
       reason:
       arc > 10
         ? `Not in the range of hues that read as a flush, so it is listed but not recommended.`
@@ -598,9 +574,6 @@ export function rankHair<T extends Ranked>(styles: T[], faceShape?: string): T[]
     return styles.map((s) => ({
       ...s,
       score: 0,
-      // No face shape came back, so nothing here was ranked to one and
-      // nothing can honestly be counted as recommended FOR her.
-      recommended: false,
       reason: `A ${s.brand.toLowerCase()} cut from YouCam's catalogue. Your scan did not return a face shape, so these are not ranked to one.`,
     }))
   }
@@ -613,9 +586,6 @@ export function rankHair<T extends Ranked>(styles: T[], faceShape?: string): T[]
     return {
       ...s,
       score: avoids.length * 6 - wants.length * 4,
-      // An oval face has no wants and no avoids because it carries most
-      // shapes — so for it, everything unopposed counts.
-      recommended: avoids.length === 0 && (wants.length > 0 || key === 'oval'),
       reason: wants.length
         ? `Your scan read a ${key} face, which ${rule.needs} — and this is a ${describe(wants)} shape.`
         : avoids.length
@@ -659,7 +629,6 @@ export function rankSkincare(products: Product[], concerns: ConcernRow[]): Ranke
         ...p,
         // Negated so the shared "lower is better" convention holds.
         score: -total,
-        recommended: hit.length > 0,
         reason: hit.length
           ? `Targets ${hit.map((h) => `${h.label} (your scan read ${pct(h.sev)})`).join(' and ')}.`
           : 'A general-purpose step, not aimed at anything your scan flagged.',

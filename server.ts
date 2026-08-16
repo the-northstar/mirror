@@ -642,27 +642,13 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       skincare: rankSkincare(withStore('skincare', skincare), concerns),
     }
 
-    // Trimmed for transport. Everything counted below is counted on what
-    // SURVIVES this, never on the catalogue behind it.
+    // How big each aisle really is, taken BEFORE the transport trim.
+    const catalogue = Object.fromEntries(
+      Object.entries(shortlists).map(([aisle, list]) => [aisle, list.length]),
+    )
     for (const [aisle, list] of Object.entries(shortlists)) {
       if (list.length > SHORTLIST) shortlists[aisle] = list.slice(0, SHORTLIST)
     }
-
-    /**
-     * What the chooser prints, counted on the shelf she can actually open.
-     *
-     * Counting the full catalogue first was worse than useless: it promised
-     * 858 lipsticks against a shelf that only ever carried 500, so the figure
-     * matched nothing she could reach and read as invented. A number the
-     * shopper cannot get to is a number she is right not to trust — these are
-     * exactly the rows behind the aisle's own filter.
-     */
-    const counts = Object.fromEntries(
-      Object.entries(shortlists).map(([aisle, list]) => [
-        aisle,
-        { available: list.length, recommended: list.filter((p) => p.recommended).length },
-      ]),
-    )
 
     // Aisles the shopper has to ask for. They are still RANKED and still
     // returned in full, so opening the section costs no second request and
@@ -702,6 +688,41 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       req.signal,
     )
 
+    // A folded aisle is withheld from the model, so it comes back with no
+    // picks at all — which would leave it the one shelf a shopper opens to
+    // find nothing recommended. It gets its colour matches instead, labelled
+    // as matches: the aisle is unadvised, not unranked.
+    const picks = {
+      ...topMatches(Object.fromEntries(gated.map((a) => [a, shortlists[a] ?? []]))),
+      ...verdict.picks,
+    }
+
+    /**
+     * What the chooser prints.
+     *
+     * `recommended` is the STYLIST'S set — the products the judge actually
+     * chose for her — not a count of everything that clears a threshold. A
+     * per-row bar could not carry this number honestly: measured live it
+     * passed 482 of 500 lipsticks, because for a neutral undertone most
+     * lipsticks genuinely do suit, and a figure that passes 96% of an aisle
+     * is not a recommendation. It is also the only count she can verify, since
+     * opening the aisle lands on exactly these rows.
+     *
+     * `shown` is separate from `available` because two aisles are trimmed for
+     * transport, and calling the trimmed slice "available" would understate a
+     * 1,756-shade catalogue as 500.
+     */
+    const counts = Object.fromEntries(
+      Object.entries(shortlists).map(([aisle, list]) => [
+        aisle,
+        {
+          available: catalogue[aisle] ?? list.length,
+          shown: list.length,
+          recommended: picks[aisle]?.length ?? 0,
+        },
+      ]),
+    )
+
     // Concealer is derived, not stocked: no free catalogue carries one.
     const top = shortlists.foundation[0]
     const concealer = top
@@ -715,14 +736,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       counts,
       audience: shopFor,
       gated,
-      // A folded aisle is withheld from the model, so it comes back with no
-      // picks at all — which would leave it the one shelf a shopper opens to
-      // find nothing recommended. It gets its colour matches instead, labelled
-      // as matches: the aisle is unadvised, not unranked.
-      picks: {
-        ...topMatches(Object.fromEntries(gated.map((a) => [a, shortlists[a] ?? []]))),
-        ...verdict.picks,
-      },
+      picks,
       together: verdict.together,
       concealer,
       makeup: {

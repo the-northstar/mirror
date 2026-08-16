@@ -50,8 +50,6 @@ interface RankedItem {
   image?: string
   url?: string
   reason: string
-  /** Whether it clears its aisle's own bar, as opposed to merely being ranked. */
-  recommended?: boolean
 }
 
 interface Shop {
@@ -62,8 +60,8 @@ interface Shop {
   audience: ShoppingFor
   /** Ranked and returned, but folded away until the shopper asks for them. */
   gated: string[]
-  /** Per aisle, counted before the shelf was trimmed for transport. */
-  counts: Record<string, { available: number; recommended: number }>
+  /** Per aisle. `recommended` is the stylist's own set, so it is verifiable. */
+  counts: Record<string, { available: number; shown: number; recommended: number }>
   picks: Record<
     string,
     Array<{ productId: string; reason: string; source: 'model' | 'match'; rank: number }>
@@ -961,7 +959,7 @@ function ShopView({
     ...items.filter((p) => !picks.has(p.id)),
   ]
   // Exactly the rows the chooser counted, in the same order.
-  const suited = ranked.filter((p) => p.recommended)
+  const suited = ranked.filter((p) => picks.has(p.id))
   const showing = onlyRecommended && suited.length > 0 ? suited : ranked
 
   return (
@@ -992,12 +990,16 @@ function ShopView({
               aria-pressed={!onlyRecommended || suited.length === 0}
               onClick={() => { setOnlyRecommended(false); setShown(PAGE) }}
             >
-              All {items.length} available
+              Browse all {items.length.toLocaleString()}
+              {/* Said plainly when the aisle is bigger than the shelf, rather
+                  than passing the trimmed slice off as the whole catalogue. */}
+              {shop.counts?.[aisle] && shop.counts[aisle].available > items.length &&
+                ` of ${shop.counts[aisle].available.toLocaleString()}`}
             </button>
             {suited.length === 0 && (
               <span className="tiny">
-                Nothing here cleared this aisle's bar for your reading, so the
-                whole shelf is shown, ordered by how close it comes.
+                No stylist picks came back for this aisle, so the whole shelf is
+                shown, ordered against your reading.
               </span>
             )}
           </div>
