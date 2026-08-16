@@ -61,6 +61,7 @@ import {
   rankLipstick,
   rankSkincare,
   JUDGE_SLICE,
+  SHORTLIST,
   type Ranked,
   type Shopper,
 } from './src/lib/rank'
@@ -641,6 +642,28 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       skincare: rankSkincare(withStore('skincare', skincare), concerns),
     }
 
+    // Trimmed for transport. Everything counted below is counted on what
+    // SURVIVES this, never on the catalogue behind it.
+    for (const [aisle, list] of Object.entries(shortlists)) {
+      if (list.length > SHORTLIST) shortlists[aisle] = list.slice(0, SHORTLIST)
+    }
+
+    /**
+     * What the chooser prints, counted on the shelf she can actually open.
+     *
+     * Counting the full catalogue first was worse than useless: it promised
+     * 858 lipsticks against a shelf that only ever carried 500, so the figure
+     * matched nothing she could reach and read as invented. A number the
+     * shopper cannot get to is a number she is right not to trust — these are
+     * exactly the rows behind the aisle's own filter.
+     */
+    const counts = Object.fromEntries(
+      Object.entries(shortlists).map(([aisle, list]) => [
+        aisle,
+        { available: list.length, recommended: list.filter((p) => p.recommended).length },
+      ]),
+    )
+
     // Aisles the shopper has to ask for. They are still RANKED and still
     // returned in full, so opening the section costs no second request and
     // nothing is decided for them twice — they are just not put on the shelf
@@ -689,6 +712,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       palette,
       formula,
       shortlists,
+      counts,
       audience: shopFor,
       gated,
       // A folded aisle is withheld from the model, so it comes back with no

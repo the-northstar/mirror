@@ -19,6 +19,17 @@ export interface Ranked extends Product {
   score: number
   /** Shopper-facing cause, naming the measurement that produced the pick. */
   reason: string
+  /**
+   * Does this actually clear the aisle's own bar?
+   *
+   * The shelf is ordered, not filtered — a shopper can scroll to a foundation
+   * 22 dE off her face, and should be able to. But "500 ranked" counted that
+   * one too, which made the number describe the CATALOGUE rather than her.
+   * Each ranker sets this where it already decides the reason, because the
+   * branch that says "this will read as a different colour on your face" is
+   * the same branch that knows it is not a recommendation.
+   */
+  recommended: boolean
 }
 
 /**
@@ -38,9 +49,12 @@ export interface Shopper {
 }
 
 /**
- * A bound, not a shelf size: the near-duplicate and per-brand passes need
- * something finite to stop at. It is far above what any aisle holds, so the
- * shopper still gets every distinct product and the UI paginates them.
+ * How many rows travel to the browser per aisle.
+ *
+ * Applied at the RESPONSE boundary, not inside the rankers, so the counts the
+ * chooser prints describe the catalogue rather than this number. Capping
+ * during ranking meant two different aisles both reported exactly 500
+ * available, which is a tell that the figure was the cap and not the shelf.
  */
 export const SHORTLIST = 500
 
@@ -69,12 +83,13 @@ export function rankFoundation(products: Product[], skinHex: string): Ranked[] {
     .sort((a, b) => a.score - b.score)
 
   const picked = pickDistinct(scored, PER_BRAND_CAP)
-  // Relax only the brand cap if the list came up short.
-  const filled = picked.length < SHORTLIST ? pickDistinct(scored, Infinity, picked) : picked
+  // Relax the brand cap so every distinct shade still appears, further down.
+  const filled = pickDistinct(scored, Infinity, picked)
 
-  return filled.slice(0, SHORTLIST).map((p) => ({
+  return filled.map((p) => ({
     ...p,
     reason: whyFoundation(p.score, skinHex),
+    recommended: p.score < 5,
   }))
 }
 
@@ -105,7 +120,6 @@ function pickDistinct(
   for (const s of seed) perBrand.set(s.brand, (perBrand.get(s.brand) ?? 0) + 1)
 
   for (const cand of scored) {
-    if (out.length >= SHORTLIST) break
     if (out.some((o) => o.id === cand.id)) continue
     if ((perBrand.get(cand.brand) ?? 0) >= brandCap) continue
     // Never show two shades the eye reads as one.
@@ -173,7 +187,6 @@ function spread(scored: Ranked[], perBrand = 3, perShade = 2): Ranked[] {
   const seenShade = new Map<string, number>()
 
   for (const row of sorted) {
-    if (picked.length >= SHORTLIST) break
     const brand = seenBrand.get(row.brand) ?? 0
     if (brand >= perBrand) continue
     // Colour is the whole proposition here, so three rows of one colour read
@@ -188,7 +201,6 @@ function spread(scored: Ranked[], perBrand = 3, perShade = 2): Ranked[] {
     seenShade.set(shadeKey(row.hex), shade + 1)
   }
   for (const row of sorted) {
-    if (picked.length >= SHORTLIST) break
     if (!taken.has(row.id)) picked.push(row)
   }
   return picked
@@ -254,9 +266,16 @@ export function rankClothes(products: Product[], shopper: Shopper): Ranked[] {
 
     const score = undertone + contrast + amplifies + settles + season
 
-    return { ...p, score, reason: whyGarment({
-      lch, weight, palette, near, undertone, contrast, amplifies, settles, redness, dL,
-    }) }
+    return {
+      ...p,
+      score,
+      reason: whyGarment({
+        lch, weight, palette, near, undertone, contrast, amplifies, settles, redness, dL,
+      }),
+      // Nothing to warn her about AND the palette actively favours it —
+      // "does not clash" is a low bar for a garment she is being shown.
+      recommended: amplifies <= 6 && contrast <= 8 && undertone <= 18 && score <= 0,
+    }
   })
 
   return spread(scored)
@@ -399,7 +418,15 @@ export function rankLipstick(products: Product[], shopper: Shopper): Ranked[] {
 
     const score = arc + side + payoff + chalky
 
-    return { ...p, score, reason:
+    return { ...p, score,
+      // Clearing the gate is not the same as suiting her. Inside the wearable
+      // arc almost every lipstick passes — measured live, 493 of 500 — and a
+      // count that passes 99% is measuring "is this a lipstick", not "is this
+      // for you". So the shift has to land near its ideal, not merely inside
+      // the band, and the shade has to sit on her side of the arc.
+      recommended:
+        off <= 12 && !chalky && side <= 4 && (shift === null || (shift >= 18 && shift <= 40)),
+      reason:
       off > 12
         ? `Outside the range of hues that read as lipstick on a face, so it is listed but not recommended.`
         : chalky
@@ -440,7 +467,10 @@ export function rankBlush(products: Product[], shopper: Shopper): Ranked[] {
 
     const score = arc + side + visibility
 
-    return { ...p, score, reason:
+    return { ...p, score,
+      // Same rule: near the ideal lift, not merely visible.
+      recommended: arc <= 10 && side <= 4 && shift >= 14 && shift <= 34,
+      reason:
       arc > 10
         ? `Not in the range of hues that read as a flush, so it is listed but not recommended.`
         : shift < 10
@@ -568,6 +598,9 @@ export function rankHair<T extends Ranked>(styles: T[], faceShape?: string): T[]
     return styles.map((s) => ({
       ...s,
       score: 0,
+      // No face shape came back, so nothing here was ranked to one and
+      // nothing can honestly be counted as recommended FOR her.
+      recommended: false,
       reason: `A ${s.brand.toLowerCase()} cut from YouCam's catalogue. Your scan did not return a face shape, so these are not ranked to one.`,
     }))
   }
@@ -580,6 +613,9 @@ export function rankHair<T extends Ranked>(styles: T[], faceShape?: string): T[]
     return {
       ...s,
       score: avoids.length * 6 - wants.length * 4,
+      // An oval face has no wants and no avoids because it carries most
+      // shapes — so for it, everything unopposed counts.
+      recommended: avoids.length === 0 && (wants.length > 0 || key === 'oval'),
       reason: wants.length
         ? `Your scan read a ${key} face, which ${rule.needs} — and this is a ${describe(wants)} shape.`
         : avoids.length
@@ -623,13 +659,13 @@ export function rankSkincare(products: Product[], concerns: ConcernRow[]): Ranke
         ...p,
         // Negated so the shared "lower is better" convention holds.
         score: -total,
+        recommended: hit.length > 0,
         reason: hit.length
           ? `Targets ${hit.map((h) => `${h.label} (your scan read ${pct(h.sev)})`).join(' and ')}.`
           : 'A general-purpose step, not aimed at anything your scan flagged.',
       }
     })
     .sort((a, b) => a.score - b.score)
-    .slice(0, SHORTLIST)
 }
 
 const pct = (v: number) => `${Math.round(v * 100)}%`

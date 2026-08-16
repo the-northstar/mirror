@@ -713,6 +713,20 @@
   margin-top: 2px;
 }
 
+/* The chooser's two numbers, as the control that produces them. */
+.shelf-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.shelf-filter .pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Shopping for ---------------------------------------------------------- */
 .audience {
   border: 0;
@@ -1478,6 +1492,11 @@
 
 .choice {
   display: grid;
+  /* The art keeps its aspect ratio; the body absorbs the slack. Without the
+     explicit rows the grid shared a stretched card's extra height between
+     both, so a one-line blurb grew the IMAGE and pushed that card's title
+     below its neighbours' — the row looked misaligned for no visible reason. */
+  grid-template-rows: auto 1fr;
   gap: 0;
   border: 1px solid var(--line);
   background: var(--card);
@@ -1518,9 +1537,26 @@
   display: grid;
   gap: 3px;
   padding: 14px;
+  /* Rows sit at the top rather than spreading to fill. The grid stretches
+     every card in a row to the tallest one, and without this the extra height
+     was shared out between the lines — so one card wrapping its counts pushed
+     every other card's title down by a few pixels. */
+  align-content: start;
 }
 
+/* Two numbers, weighted apart: the shelf size is context, the count that
+   suits her is the answer. Stacked rather than inline — at this card width
+   "1,756 available · 858 for you" wrapped mid-phrase, which broke the line
+   AND the row's alignment with it. */
 .choice-count {
+  display: grid;
+  gap: 1px;
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-weight: 400;
+}
+
+.choice-count strong {
   color: var(--accent);
   font-weight: 600;
 }

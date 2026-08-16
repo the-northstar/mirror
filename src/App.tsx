@@ -50,6 +50,8 @@ interface RankedItem {
   image?: string
   url?: string
   reason: string
+  /** Whether it clears its aisle's own bar, as opposed to merely being ranked. */
+  recommended?: boolean
 }
 
 interface Shop {
@@ -60,6 +62,8 @@ interface Shop {
   audience: ShoppingFor
   /** Ranked and returned, but folded away until the shopper asks for them. */
   gated: string[]
+  /** Per aisle, counted before the shelf was trimmed for transport. */
+  counts: Record<string, { available: number; recommended: number }>
   picks: Record<
     string,
     Array<{ productId: string; reason: string; source: 'model' | 'match'; rank: number }>
@@ -862,6 +866,10 @@ function ShopView({
   // Shelves run to hundreds of rows, so they arrive a page at a time.
   const PAGE = 24
   const [shown, setShown] = useState(PAGE)
+  // The chooser's "recommended for you" count has to be something the shopper
+  // can land on and count. This is that filter, defaulting on: a number you
+  // cannot get to is a number you are right not to trust.
+  const [onlyRecommended, setOnlyRecommended] = useState(true)
   // Folded-away aisles, once asked for. Asking is the whole gate: they are
   // already ranked and already here, so opening them costs no request.
   const [showGated, setShowGated] = useState(false)
@@ -915,9 +923,15 @@ function ShopView({
                 <span className="choice-body">
                   <strong>{a.label}</strong>
                   <span className="tiny">{AISLE_BLURB[a.key] ?? ''}</span>
-                  {shop.shortlists[a.key] && (
+                  {shop.counts?.[a.key] && (
                     <span className="tiny choice-count">
-                      {shop.shortlists[a.key].length} ranked
+                      {shop.counts[a.key].available.toLocaleString()} available
+                      {/* The second number is the point: the shelf is ordered
+                          rather than filtered, so most of the first number is
+                          reachable but not suited to her. */}
+                      <strong>
+                        {shop.counts[a.key].recommended.toLocaleString()} recommended for you
+                      </strong>
                     </span>
                   )}
                 </span>
@@ -942,10 +956,13 @@ function ShopView({
   const picks = new Map((shop.picks[aisle] ?? []).map((p) => [p.productId, p]))
   // The stylist's set is the answer to the aisle, so it opens the shelf
   // instead of being scattered down it wherever colour distance put each one.
-  const ordered = [
+  const ranked = [
     ...items.filter((p) => picks.has(p.id)).sort((a, b) => picks.get(a.id)!.rank - picks.get(b.id)!.rank),
     ...items.filter((p) => !picks.has(p.id)),
   ]
+  // Exactly the rows the chooser counted, in the same order.
+  const suited = ranked.filter((p) => p.recommended)
+  const showing = onlyRecommended && suited.length > 0 ? suited : ranked
 
   return (
     <main className="wrap stack-lg">
@@ -956,10 +973,35 @@ function ShopView({
         <h2 className="display h-lg">
           {available.find((a) => a.key === aisle)?.label ?? 'Chosen for you'}
         </h2>
-        <p className="tiny">
-          {AISLE_BLURB[aisle] ?? ''}
-          {items.length > 0 && ` · ${items.length} ranked for you`}
-        </p>
+        <p className="tiny">{AISLE_BLURB[aisle] ?? ''}</p>
+
+        {/* The two numbers again, as the control that produces them. Tapping
+            either one lands on exactly the rows it counted. */}
+        {items.length > 0 && (
+          <div className="shelf-filter" role="group" aria-label="Which products to show">
+            <button
+              className={onlyRecommended && suited.length > 0 ? 'pill on' : 'pill'}
+              aria-pressed={onlyRecommended && suited.length > 0}
+              onClick={() => { setOnlyRecommended(true); setShown(PAGE) }}
+              disabled={suited.length === 0}
+            >
+              {suited.length} recommended for you
+            </button>
+            <button
+              className={!onlyRecommended || suited.length === 0 ? 'pill on' : 'pill'}
+              aria-pressed={!onlyRecommended || suited.length === 0}
+              onClick={() => { setOnlyRecommended(false); setShown(PAGE) }}
+            >
+              All {items.length} available
+            </button>
+            {suited.length === 0 && (
+              <span className="tiny">
+                Nothing here cleared this aisle's bar for your reading, so the
+                whole shelf is shown, ordered by how close it comes.
+              </span>
+            )}
+          </div>
+        )}
         {shop.together && (
           <p className="stylist">
             <span className="stylist-mark" aria-hidden />
@@ -1012,7 +1054,7 @@ function ShopView({
       )}
 
       <div className="grid-3">
-        {ordered.slice(0, shown).map((p) => (
+        {showing.slice(0, shown).map((p) => (
           <ProductCard
             key={p.id}
             product={p}
@@ -1026,13 +1068,13 @@ function ShopView({
         ))}
       </div>
 
-      {items.length > shown && (
+      {showing.length > shown && (
         <button
           className="btn btn-quiet more-btn"
           onClick={() => setShown((n) => n + PAGE)}
         >
-          Show {Math.min(PAGE, items.length - shown)} more
-          <span className="tiny"> · {items.length - shown} left</span>
+          Show {Math.min(PAGE, showing.length - shown)} more
+          <span className="tiny"> · {showing.length - shown} left</span>
         </button>
       )}
       </>
