@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ClerkProvider } from '@clerk/clerk-react'
+import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { CLERK_KEY } from './lib/clerk.ts'
@@ -11,10 +12,14 @@ createRoot(document.getElementById('root')!).render(
         Store screen explains the setup instead. */}
     {CLERK_KEY ? (
       <ClerkProvider publishableKey={CLERK_KEY} afterSignOutUrl="/">
-        <App />
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
       </ClerkProvider>
     ) : (
-      <App />
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     )}
   </StrictMode>,
 )

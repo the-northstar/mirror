@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Camera } from './Camera'
 import { Studio } from './Studio'
 import { Landing } from './landing/Landing'
@@ -70,8 +71,40 @@ const CONCERN_LABEL: Record<string, string> = {
 
 /* -- App ---------------------------------------------------------------- */
 
+/** Screens are real URLs, so back, refresh and sharing all behave. */
+const PATHS: Record<Screen, string> = {
+  land: '/',
+  scanning: '/scanning',
+  diagnosis: '/diagnosis',
+  shop: '/shop',
+  cart: '/bag',
+  store: '/store',
+}
+const SCREEN_BY_PATH = Object.fromEntries(
+  Object.entries(PATHS).map(([k, v]) => [v, k as Screen]),
+) as Record<string, Screen>
+
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('land')
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+
+  // The URL decides the screen. Deep links to a screen that needs a scan fall
+  // back to the landing rather than rendering an empty shell.
+  const routed = SCREEN_BY_PATH[pathname] ?? 'land'
+  const [screen, setScreenState] = useState<Screen>(routed)
+
+  const setScreen = useCallback(
+    (next: Screen) => {
+      setScreenState(next)
+      if (PATHS[next] !== pathname) navigate(PATHS[next])
+    },
+    [navigate, pathname],
+  )
+
+  // Back and forward move the screen too, not just the address bar.
+  useEffect(() => {
+    setScreenState(SCREEN_BY_PATH[pathname] ?? 'land')
+  }, [pathname])
   const [reading, setReading] = useState<Reading | null>(null)
   const [shop, setShop] = useState<Shop | null>(null)
   const [photo, setPhoto] = useState<string | null>(null)

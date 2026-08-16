@@ -76,14 +76,16 @@ export function PointCloudFace({ src, className = "" }: { src: string; className
       points = next;
     }
 
+    // Read once, not per frame: getComputedStyle forces a style recalc, and at
+    // 60fps that alone was costing more than the particle maths.
+    const themeStyles = getComputedStyle(document.documentElement);
+    const ink = themeStyles.getPropertyValue("--ink").trim() || "#16130F";
+    const copper = themeStyles.getPropertyValue("--copper").trim() || "#A65E3C";
+
     function frame() {
       const w = canvas!.clientWidth;
       const h = canvas!.clientHeight;
       ctx!.clearRect(0, 0, w, h);
-
-      const styles = getComputedStyle(document.documentElement);
-      const ink = styles.getPropertyValue("--ink").trim() || "#16130F";
-      const copper = styles.getPropertyValue("--copper").trim() || "#A65E3C";
 
       for (const p of points) {
         const dx = p.x - mouse.current.x;
@@ -113,8 +115,21 @@ export function PointCloudFace({ src, className = "" }: { src: string; className
         ctx!.fill();
       }
       ctx!.globalAlpha = 1;
-      raf = requestAnimationFrame(frame);
+      if (visible) raf = requestAnimationFrame(frame);
     }
+
+    // An off-screen canvas repainting at 60fps is pure cost, and this sits at
+    // the top of a long page.
+    let visible = true;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        const wasVisible = visible;
+        visible = entry.isIntersecting;
+        if (visible && !wasVisible) raf = requestAnimationFrame(frame);
+      },
+      { threshold: 0 },
+    );
+    io.observe(canvas);
 
     function onMove(e: PointerEvent) {
       const rect = canvas!.getBoundingClientRect();
@@ -144,6 +159,7 @@ export function PointCloudFace({ src, className = "" }: { src: string; className
 
     return () => {
       cancelAnimationFrame(raf);
+      io.disconnect();
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
       window.removeEventListener("resize", onResize);
