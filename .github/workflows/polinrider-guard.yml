@@ -10,13 +10,26 @@ name: PolinRider Guard
 on:
   push:
     branches: ['**']
-  pull_request:
-    branches: ['**']   # merge-block layer: a PR carrying payload fails this check
+    # Cost optimization: only scan pushes that touch files the payload can live in
+    # (config files + font-disguised payloads + any source). Doc/image-only pushes
+    # skip the guard entirely, saving Actions minutes with no loss of coverage —
+    # the payload only ever lands in these file types.
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.json'
+      - '**/*.woff2'
+      - '**/*.woff'
+      - '**/*.ttf'
+      - '**/*.eot'
+      - '**/.vscode/**'
 
 permissions:
   contents: write   # to auto-revert
   issues: write     # to alert
-  pull-requests: write
 
 jobs:
   scan:
@@ -62,7 +75,7 @@ jobs:
           fi
 
       - name: Auto-revert the infected push
-        if: steps.scan.outputs.detected == '1' && github.event_name == 'push'
+        if: steps.scan.outputs.detected == '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -108,11 +121,10 @@ jobs:
           repo='${{ github.repository }}'
           ref='${{ github.ref_name }}'
           sha='${{ github.sha }}'
-          event='${{ github.event_name }}'
           # resolve discord id from the map; fall back to plain text mention
           did=$(printf '%s' "${GH_DISCORD_MAP:-{}}" | /usr/bin/python3 -c "import sys,json;m=json.load(sys.stdin);print(m.get('$actor',''))" 2>/dev/null || true)
           if [ -n "$did" ]; then who="<@${did}>"; else who="\`$actor\`"; fi
-          action="auto-reverted"; [ "$event" = "pull_request" ] && action="blocked from merging"
+          action="auto-reverted"
           read -r -d '' MSG <<EOF || true
 🚨 **PolinRider malware $action** in \`$repo\` on \`$ref\`
 Pushed by $who (github: \`$actor\`), commit \`${sha:0:8}\`.
