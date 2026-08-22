@@ -108,39 +108,37 @@ jobs:
               labels: ['security','polinrider'],
             });
 
-      # Instead of pinging Discord per-repo (a 70-repo burst = 70 pings), record the
-      # detection to the central tracking issue and fire the aggregator, which
-      # debounces 5 min and sends ONE batched alert + DMs. Uses the cross-repo token.
-      - name: Record detection + trigger aggregator
+      - name: Notify Discord (tag the pusher, tell them what to do)
         if: steps.scan.outputs.detected == '1'
         uses: actions/github-script@v7
         env:
-          ENFORCER_TOKEN: ${{ secrets.ENFORCER_TOKEN }}
-          TRACKING_ISSUE: ${{ secrets.TRACKING_ISSUE }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+          GH_DISCORD_MAP: ${{ secrets.GH_DISCORD_MAP }}
         with:
-          github-token: ${{ secrets.ENFORCER_TOKEN }}
           script: |
-            const org = context.repo.owner;
-            const event = {
-              repo: context.repo.repo, actor: context.actor,
-              sha: context.sha.slice(0,8), ref: context.ref,
-              ts: new Date().toISOString(),
-            };
-            const issue = Number(process.env.TRACKING_ISSUE);
-            if (issue) {
-              try {
-                await github.rest.issues.createComment({
-                  owner: org, repo: '.github', issue_number: issue,
-                  body: JSON.stringify(event),
-                });
-              } catch (e) { core.warning('log comment failed: ' + e); }
-            }
-            try {
-              await github.rest.repos.createDispatchEvent({
-                owner: org, repo: '.github',
-                event_type: 'malware-detected', client_payload: event,
-              });
-            } catch (e) { core.warning('dispatch failed: ' + e); }
+            const wh = process.env.DISCORD_WEBHOOK;
+            if (!wh) { core.info('no webhook secret; skipping'); return; }
+            const actor = context.actor;
+            let did = '';
+            try { did = (JSON.parse(process.env.GH_DISCORD_MAP || '{}'))[actor] || ''; } catch (e) {}
+            const who = did ? `<@${did}>` : `\`${actor}\``;
+            const sha = context.sha.slice(0,8);
+            const msg =
+              `🚨 **PolinRider malware auto-reverted** in \`${context.repo.owner}/${context.repo.repo}\` on \`${context.ref}\`\n` +
+              `Pushed by ${who} (github: \`${actor}\`), commit \`${sha}\`.\n\n` +
+              `**${who} — your machine is infected. Do this NOW:**\n` +
+              `1. **Stop pushing** until clean — every push keeps getting reverted.\n` +
+              `2. **Disinfect the machine**: delete \`.vscode/tasks.json\`, \`public/fonts/fa-solid-400.woff2\`, ` +
+              `and any \`*.config.js/mjs\` with a giant one-line blob in every local project. Quit Cursor/VS Code first. Ideally reinstall the OS.\n` +
+              `3. **Reset GitHub access from a clean device**: revoke all PATs, delete & regenerate SSH keys, ` +
+              `revoke unknown OAuth apps, change password + confirm 2FA, rotate npm/cloud/.env secrets.\n` +
+              `4. Only push again after the machine is verified clean.`;
+            const res = await fetch(wh, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'User-Agent': 'PolinRider-Guard/1.0' },
+              body: JSON.stringify({ content: msg.slice(0,1900), allowed_mentions: { parse: ['users'] } }),
+            });
+            core.info('discord status ' + res.status);
 
       - name: Fail the run if payload found
         if: steps.scan.outputs.detected == '1'
