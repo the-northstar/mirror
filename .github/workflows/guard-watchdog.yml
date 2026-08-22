@@ -27,21 +27,26 @@ jobs:
         run: |
           set -uo pipefail
           f=".github/workflows/polinrider-guard.yml"
-          canon=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" \
-            "https://api.github.com/repos/$ORG/.github/contents/guard/polinrider-guard.yml" 2>/dev/null)
-          local_ok=0
-          if [ -f "$f" ] && [ "$(git hash-object "$f")" = "$(printf '%s' "$canon" | git hash-object --stdin)" ]; then
-            local_ok=1
+          # Alarm ONLY on a guard that is missing or GUTTED (non-functional) — not on
+          # a mere content difference (legit guard updates change content and must not
+          # cry wolf). "Functional" = has the push trigger AND the scan step AND the
+          # auto-revert. An attacker disabling protection removes one of these.
+          functional=0
+          if [ -f "$f" ] \
+             && grep -q "Scan for PolinRider payload" "$f" \
+             && grep -q "Auto-revert the infected push" "$f" \
+             && grep -qE "^\s*push:" "$f"; then
+            functional=1
           fi
-          if [ "$local_ok" = "1" ]; then
-            echo "guard intact"; exit 0
+          if [ "$functional" = "1" ]; then
+            echo "guard functional"; exit 0
           fi
-          echo "::warning::guard missing or modified — re-triggering enforcer for ${{ github.repository }}"
+          echo "::warning::guard missing or gutted — re-triggering enforcer for ${{ github.repository }}"
           # instant single-repo re-assertion (no waiting for daily cron)
           gh workflow run guard-enforcer.yml --repo "$ORG/.github" \
             -f repo="${{ github.event.repository.name }}" >/dev/null 2>&1 || true
           if [ -n "${DISCORD_WEBHOOK:-}" ]; then
-            msg="🚨 **PolinRider Guard was removed/altered in \`${{ github.repository }}\`** by \`${{ github.actor }}\` (commit ${{ github.sha }}). Enforcer re-triggered to restore it. If this wasn't intentional, that account's machine may be compromised and trying to disable protection."
+            msg="🚨 **PolinRider Guard was REMOVED or DISABLED in \`${{ github.repository }}\`** by \`${{ github.actor }}\` (commit ${{ github.sha }}). Enforcer re-triggered to restore it. If this wasn't intentional, that account's machine may be compromised and trying to disable protection."
             curl -s -X POST "$DISCORD_WEBHOOK" -H 'Content-Type: application/json' \
               -d "$(printf '%s' "$msg" | python3 -c 'import json,sys;print(json.dumps({"content":sys.stdin.read()}))')" >/dev/null 2>&1 || true
           fi
