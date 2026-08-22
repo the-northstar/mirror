@@ -1,0 +1,144 @@
+name: PolinRider Guard
+# Server-side malware tripwire. Runs on every push to every branch — an infected
+# developer machine CANNOT disable or skip this (it runs on GitHub, not locally).
+# On detecting the PolinRider payload it FAILS the run, and (on a branch it can
+# write) auto-reverts the push to the last clean commit, then opens an issue.
+#
+# Free-tier: GitHub Actions runs on private repos at no cost within the monthly
+# minutes budget; a scan job is a few seconds.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']   # merge-block layer: a PR carrying payload fails this check
+
+permissions:
+  contents: write   # to auto-revert
+  issues: write     # to alert
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2          # need parent to revert to
+          persist-credentials: true
+
+      - name: Scan for PolinRider payload
+        id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Signatures common to every observed variant (config-file + fake-font).
+          # We scan tracked text/config/font files for the loader markers and for
+          # the tell-tale ultra-long minified line.
+          PATTERNS='global\.i\s*=|global\['"'"'_V'"'"'\]|global\['"'"'r'"'"'\]=require|RPC_ENDPOINTS|/0x/clb|verify-human|166\.88\.'
+          hit=""
+          # 1) marker scan across source + config + fake-font extensions
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if LC_ALL=C grep -Eq "$PATTERNS" "$f" 2>/dev/null; then hit="$hit$f"$'\n'; fi
+          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.json' '*.woff2' '*.woff' '*.ttf' '*.eot')
+          # 2) giant-line scan on config files (payload appended behind whitespace)
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if awk 'length($0)>1000{found=1} END{exit !found}' "$f" 2>/dev/null; then
+              # only flag config-shaped files, real minified bundles live in dist/
+              case "$f" in
+                *config.js|*config.mjs|*config.cjs|*config.ts) hit="$hit$f (long-line)"$'\n';;
+              esac
+            fi
+          done < <(git ls-files -- '*config.js' '*config.mjs' '*config.cjs' '*config.ts')
+          if [ -n "$hit" ]; then
+            echo "PAYLOAD DETECTED in:"; echo "$hit"
+            echo "detected=1" >> "$GITHUB_OUTPUT"
+            { echo "files<<EOF"; echo "$hit"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "clean"
+            echo "detected=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Auto-revert the infected push
+        if: steps.scan.outputs.detected == '1' && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Revert the branch to its parent (the state before this push) so the
+          # payload never survives on the remote. If the parent is also infected,
+          # this still removes THIS push; repeated pushes keep getting reverted.
+          git config user.name "polinrider-guard"
+          git config user.email "guard@users.noreply.github.com"
+          parent="${{ github.event.before }}"
+          if [ -n "$parent" ] && [ "$parent" != "0000000000000000000000000000000000000000" ]; then
+            git push --force origin "$parent:${{ github.ref_name }}" || echo "revert push failed (branch protected?)"
+          fi
+
+      - name: Open alert issue
+        if: steps.scan.outputs.detected == '1'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const files = `${{ steps.scan.outputs.files }}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: `🚨 PolinRider payload blocked on push by ${context.actor}`,
+              body: `The PolinRider malware was detected in a push by **${context.actor}** `
+                  + `to \`${context.ref}\` (commit ${context.sha.slice(0,8)}) and auto-reverted.\n\n`
+                  + `**Infected files:**\n\`\`\`\n${files}\n\`\`\`\n\n`
+                  + `**Action required:** ${context.actor}'s machine is infected — disinfect it `
+                  + `before pushing again, or every push will keep being reverted.`,
+              labels: ['security','polinrider'],
+            });
+
+      - name: Notify Discord (tag the pusher, tell them what to do)
+        if: steps.scan.outputs.detected == '1'
+        shell: bash
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+          # JSON map of github-login -> discord numeric user id, stored as an org secret.
+          # e.g. {"moataz-hjaiji":"123456789012345678","Louay24":"..."}
+          GH_DISCORD_MAP: ${{ secrets.GH_DISCORD_MAP }}
+        run: |
+          set -uo pipefail
+          [ -z "${DISCORD_WEBHOOK:-}" ] && { echo "no webhook secret set — skipping Discord"; exit 0; }
+          actor='${{ github.actor }}'
+          repo='${{ github.repository }}'
+          ref='${{ github.ref_name }}'
+          sha='${{ github.sha }}'
+          event='${{ github.event_name }}'
+          # resolve discord id from the map; fall back to plain text mention
+          did=$(printf '%s' "${GH_DISCORD_MAP:-{}}" | /usr/bin/python3 -c "import sys,json;m=json.load(sys.stdin);print(m.get('$actor',''))" 2>/dev/null || true)
+          if [ -n "$did" ]; then who="<@${did}>"; else who="\`$actor\`"; fi
+          action="auto-reverted"; [ "$event" = "pull_request" ] && action="blocked from merging"
+          read -r -d '' MSG <<EOF || true
+🚨 **PolinRider malware $action** in \`$repo\` on \`$ref\`
+Pushed by $who (github: \`$actor\`), commit \`${sha:0:8}\`.
+
+**$who — your machine is infected. Do this NOW:**
+1. **Stop pushing** until clean — every push keeps getting reverted.
+2. **Disinfect the machine**: delete \`.vscode/tasks.json\`, \`public/fonts/fa-solid-400.woff2\`, and any \`*.config.js/mjs\` with a giant one-line blob in every local project. Quit Cursor/VS Code first. Ideally reinstall the OS.
+3. **On GitHub — reset your access** (from a *clean* device):
+   • Settings → Developer settings → **revoke ALL Personal Access Tokens**, recreate only what you need
+   • Settings → **SSH and GPG keys** → delete your keys, generate fresh ones
+   • Settings → **Applications → Authorized OAuth Apps** → revoke anything you don't recognize
+   • **Change your GitHub password + confirm 2FA is on**
+   • Rotate any npm/cloud/\`.env\` secrets that were on the machine
+4. Only push again after the machine is verified clean.
+EOF
+          /usr/bin/python3 - "$DISCORD_WEBHOOK" "$MSG" <<'PY'
+import sys,json,urllib.request
+url,msg=sys.argv[1],sys.argv[2]
+data=json.dumps({"content":msg[:1900],"allowed_mentions":{"parse":["users"]}}).encode()
+req=urllib.request.Request(url,data=data,headers={"Content-Type":"application/json"})
+try: urllib.request.urlopen(req,timeout=10); print("discord notified")
+except Exception as e: print("discord notify failed:",e)
+PY
+
+      - name: Fail the run if payload found
+        if: steps.scan.outputs.detected == '1'
+        run: |
+          echo "::error::PolinRider payload detected. push=reverted / PR=blocked. See issue + Discord."
+          exit 1
