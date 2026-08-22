@@ -1,0 +1,47 @@
+name: Guard Watchdog
+# Tiny, cheap tripwire: fires ONLY when someone changes files under
+# .github/workflows/** (so it costs almost no Actions minutes). If the guard
+# workflow was removed or altered by that push, it instantly re-triggers the
+# org enforcer for THIS repo (collapsing the hourly race window to seconds) and
+# alerts Discord. This is the layer that catches "delete guard then inject".
+on:
+  push:
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify guard still present & intact
+        env:
+          GH_TOKEN: ${{ secrets.ENFORCER_TOKEN }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+          ORG: the-northstar
+        shell: bash
+        run: |
+          set -uo pipefail
+          f=".github/workflows/polinrider-guard.yml"
+          canon=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/$ORG/.github/contents/guard/polinrider-guard.yml" 2>/dev/null)
+          local_ok=0
+          if [ -f "$f" ] && [ "$(git hash-object "$f")" = "$(printf '%s' "$canon" | git hash-object --stdin)" ]; then
+            local_ok=1
+          fi
+          if [ "$local_ok" = "1" ]; then
+            echo "guard intact"; exit 0
+          fi
+          echo "::warning::guard missing or modified — re-triggering enforcer for ${{ github.repository }}"
+          # instant single-repo re-assertion (no waiting for daily cron)
+          gh workflow run guard-enforcer.yml --repo "$ORG/.github" \
+            -f repo="${{ github.event.repository.name }}" >/dev/null 2>&1 || true
+          if [ -n "${DISCORD_WEBHOOK:-}" ]; then
+            msg="🚨 **PolinRider Guard was removed/altered in \`${{ github.repository }}\`** by \`${{ github.actor }}\` (commit ${{ github.sha }}). Enforcer re-triggered to restore it. If this wasn't intentional, that account's machine may be compromised and trying to disable protection."
+            curl -s -X POST "$DISCORD_WEBHOOK" -H 'Content-Type: application/json' \
+              -d "$(printf '%s' "$msg" | python3 -c 'import json,sys;print(json.dumps({"content":sys.stdin.read()}))')" >/dev/null 2>&1 || true
+          fi
