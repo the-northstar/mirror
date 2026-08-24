@@ -20,6 +20,7 @@ on:
       - '**/*.cjs'
       - '**/*.ts'
       - '**/*.tsx'
+      - '**/*.jsx'
       - '**/*.json'
       - '**/*.woff2'
       - '**/*.woff'
@@ -54,17 +55,18 @@ jobs:
           while IFS= read -r f; do
             [ -f "$f" ] || continue
             if LC_ALL=C grep -Eq "$PATTERNS" "$f" 2>/dev/null; then hit="$hit$f"$'\n'; fi
-          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.json' '*.woff2' '*.woff' '*.ttf' '*.eot')
+          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '*.woff2' '*.woff' '*.ttf' '*.eot')
           # 2) giant-line scan on config files (payload appended behind whitespace)
           while IFS= read -r f; do
             [ -f "$f" ] || continue
             if awk 'length($0)>1000{found=1} END{exit !found}' "$f" 2>/dev/null; then
               # only flag config-shaped files, real minified bundles live in dist/
               case "$f" in
-                *config.js|*config.mjs|*config.cjs|*config.ts) hit="$hit$f (long-line)"$'\n';;
+                */dist/*|*.min.js|*.bundle.js) : ;;   # real minified bundles, not a tell
+                *) hit="$hit$f (long-line)"$'\n';;
               esac
             fi
-          done < <(git ls-files -- '*config.js' '*config.mjs' '*config.cjs' '*config.ts')
+          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx')
           if [ -n "$hit" ]; then
             echo "PAYLOAD DETECTED in:"; echo "$hit"
             echo "detected=1" >> "$GITHUB_OUTPUT"
