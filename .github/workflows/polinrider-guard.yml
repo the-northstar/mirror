@@ -56,15 +56,18 @@ jobs:
             [ -f "$f" ] || continue
             if LC_ALL=C grep -Eq "$PATTERNS" "$f" 2>/dev/null; then hit="$hit$f"$'\n'; fi
           done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '*.woff2' '*.woff' '*.ttf' '*.eot')
-          # 2) giant-line scan on config files (payload appended behind whitespace)
+          # 2) appended-payload scan: a >1000-char line is a tell ONLY if it also
+          # looks like the obfuscated loader. A long line by itself is NOT enough —
+          # minified/generated code and inlined base64 assets are legitimately long
+          # (a bookmarklet.generated.ts, a Terser bundle), and flagging those reverts
+          # real work. Require an obfuscation hallmark on the long line.
+          OBF='_0x[0-9a-f]{4,}|require\\(|eval\\(|spawn|global\\[|fromCharCode|atob\\('
           while IFS= read -r f; do
             [ -f "$f" ] || continue
-            if awk 'length($0)>1000{found=1} END{exit !found}' "$f" 2>/dev/null; then
-              # only flag config-shaped files, real minified bundles live in dist/
-              case "$f" in
-                */dist/*|*.min.js|*.bundle.js) : ;;   # real minified bundles, not a tell
-                *) hit="$hit$f (long-line)"$'\n';;
-              esac
+            case "$f" in */dist/*|*.min.js|*.bundle.js) continue;; esac
+            # long line (not line 1) that ALSO matches an obfuscation hallmark
+            if awk 'NR>1 && length($0)>1000' "$f" 2>/dev/null | grep -qE "$OBF"; then
+              hit="$hit$f (appended-obfuscated)"$'\n'
             fi
           done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx')
           if [ -n "$hit" ]; then
