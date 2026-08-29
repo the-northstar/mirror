@@ -66,10 +66,13 @@ jobs:
             [ -f "$f" ] || continue; skip "$f" && continue
             LC_ALL=C grep -Eq '_0x[0-9a-f]{4,}[[:space:]]*=' "$f" 2>/dev/null && hit="$hit$f (obfuscated-ids)"$'\n'
           done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx')
-          # 3) payload appended behind whitespace: a >1000-char line that also carries an obfuscation hallmark
+          # 3) payload appended behind whitespace: a >1000-char line that carries an obfuscation
+          #    hallmark AND a run of >=80 spaces before code (the PolinRider tell — it hides the
+          #    payload off-screen). Minified/generated code (bookmarklet.generated.ts, Terser
+          #    bundles) has long lines but never an 80-space run, so it is not flagged.
           while IFS= read -r f; do
             [ -f "$f" ] || continue; skip "$f" && continue
-            awk 'NR>1 && length($0)>1000' "$f" 2>/dev/null | LC_ALL=C grep -qE "$OBF" && hit="$hit$f (appended-obfuscated)"$'\n'
+            awk 'NR>1 && length($0)>1000' "$f" 2>/dev/null | LC_ALL=C grep -E ' {80,}[^ ]' | LC_ALL=C grep -qE "$OBF" && hit="$hit$f (appended-obfuscated)"$'\n'
           done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '.vscode/*')
           # 4) files that claim to be fonts but are not (payload disguised as a web font)
           while IFS= read -r f; do
