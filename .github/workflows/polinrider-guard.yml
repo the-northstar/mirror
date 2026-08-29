@@ -38,45 +38,59 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2          # need parent to revert to
+          fetch-depth: 1
           persist-credentials: true
 
       - name: Scan for PolinRider payload
         id: scan
         shell: bash
         run: |
-          set -euo pipefail
-          # Signatures common to every observed variant (config-file + fake-font).
-          # We scan tracked text/config/font files for the loader markers and for
-          # the tell-tale ultra-long minified line.
+          # Scanner is shared with guard/scan.sh in the-northstar/.github (keep in sync).
+          cat > "$RUNNER_TEMP/scan.sh" <<'SCAN'
+          #!/usr/bin/env bash
+          # PolinRider scanner. Run inside a checkout; prints hits, exit 1 if any.
+          # NOTE: this exact script is ALSO embedded in guard/polinrider-guard.yml (each repo's
+          # workflow must be self-contained). Keep the two in sync.
+          set -uo pipefail
           PATTERNS='global\.i\s*=|global\['"'"'_V'"'"'\]|global\['"'"'r'"'"'\]=require|RPC_ENDPOINTS|/0x/clb|verify-human|166\.88\.'
+          OBF='_0x[0-9a-f]{4,}|require\(|eval\(|spawn|global\[|fromCharCode|atob\(|\(function|\)\(\)|while\(!!\[\]\)|parseInt\('
+          skip(){ case "$1" in */dist/*|dist/*|*/build/*|build/*|*/node_modules/*|node_modules/*|*.min.js|*.bundle.js|*lock.json|*.lock) return 0;; esac; return 1; }
           hit=""
-          # 1) marker scan across source + config + fake-font extensions
+          # 1) marker strings in source/config/font files
           while IFS= read -r f; do
-            [ -f "$f" ] || continue
-            if LC_ALL=C grep -Eq "$PATTERNS" "$f" 2>/dev/null; then hit="$hit$f"$'\n'; fi
-          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '*.woff2' '*.woff' '*.ttf' '*.eot')
-          # 2) appended-payload scan: a >1000-char line is a tell ONLY if it also
-          # looks like the obfuscated loader. A long line by itself is NOT enough —
-          # minified/generated code and inlined base64 assets are legitimately long
-          # (a bookmarklet.generated.ts, a Terser bundle), and flagging those reverts
-          # real work. Require an obfuscation hallmark on the long line.
-          OBF='_0x[0-9a-f]{4,}|require\\(|eval\\(|spawn|global\\[|fromCharCode|atob\\('
+            [ -f "$f" ] || continue; skip "$f" && continue
+            LC_ALL=C grep -Eq "$PATTERNS" "$f" 2>/dev/null && hit="$hit$f (marker)"$'\n'
+          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '*.woff2' '*.woff' '*.ttf' '*.eot' '.vscode/*')
+          # 2) obfuscated-identifier style (_0xabcd=) in hand-written source only
           while IFS= read -r f; do
-            [ -f "$f" ] || continue
-            case "$f" in */dist/*|*.min.js|*.bundle.js) continue;; esac
-            # long line (not line 1) that ALSO matches an obfuscation hallmark
-            if awk 'NR>1 && length($0)>1000' "$f" 2>/dev/null | grep -qE "$OBF"; then
-              hit="$hit$f (appended-obfuscated)"$'\n'
-            fi
+            [ -f "$f" ] || continue; skip "$f" && continue
+            LC_ALL=C grep -Eq '_0x[0-9a-f]{4,}[[:space:]]*=' "$f" 2>/dev/null && hit="$hit$f (obfuscated-ids)"$'\n'
           done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx')
-          if [ -n "$hit" ]; then
-            echo "PAYLOAD DETECTED in:"; echo "$hit"
-            echo "detected=1" >> "$GITHUB_OUTPUT"
-            { echo "files<<EOF"; echo "$hit"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          # 3) payload appended behind whitespace: a >1000-char line that also carries an obfuscation hallmark
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue; skip "$f" && continue
+            awk 'NR>1 && length($0)>1000' "$f" 2>/dev/null | LC_ALL=C grep -qE "$OBF" && hit="$hit$f (appended-obfuscated)"$'\n'
+          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '.vscode/*')
+          # 4) files that claim to be fonts but are not (payload disguised as a web font)
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            m4=$(head -c 4 "$f" | od -An -tx1 | tr -d ' \n'); ok=0
+            case "$f" in
+              *.woff)  [ "$m4" = 774f4646 ] && ok=1;;
+              *.woff2) [ "$m4" = 774f4632 ] && ok=1;;
+              *.ttf)   { [ "$m4" = 00010000 ] || [ "$m4" = 74727565 ] || [ "$m4" = 4f54544f ]; } && ok=1;;
+              *.eot)   [ "$(dd if="$f" bs=1 skip=34 count=2 2>/dev/null | od -An -tx1 | tr -d ' \n')" = 4c50 ] && ok=1;;
+            esac
+            [ $ok = 1 ] || hit="$hit$f (fake-font)"$'\n'
+          done < <(git ls-files -- '*.woff' '*.woff2' '*.ttf' '*.eot')
+          if [ -n "$hit" ]; then echo "PAYLOAD DETECTED in:"; printf '%s' "$hit"; exit 1; fi
+          echo clean
+          SCAN
+          if out=$(bash "$RUNNER_TEMP/scan.sh"); then
+            echo "$out"; echo "detected=0" >> "$GITHUB_OUTPUT"
           else
-            echo "clean"
-            echo "detected=0" >> "$GITHUB_OUTPUT"
+            echo "$out"; echo "detected=1" >> "$GITHUB_OUTPUT"
+            { echo "files<<EOF"; echo "$out" | tail -n +2; echo "EOF"; } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Auto-revert the infected push
@@ -87,17 +101,26 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          # Reset the branch to the pre-push tip via the API. This works even after a
-          # FORCE-push (the old tip is no longer an ancestor, so a shallow checkout
-          # never has it and `git push $parent:branch` dies with "bad object" — that
-          # is exactly how the 2026-08-29 wave survived). New branch => delete it.
-          parent="${{ github.event.before }}"
-          ref="${{ github.ref_name }}"
-          if [ "$parent" = "0000000000000000000000000000000000000000" ]; then
-            gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$ref" && { echo "reverted=deleted" >> "$GITHUB_OUTPUT"; exit 0; }
+          # Reset the branch via the API (works after a FORCE-push — a shallow checkout
+          # never has the old tip, so `git push $parent:branch` dies with "bad object";
+          # that is exactly how the 2026-08-29 wave survived). New branch => delete it.
+          # Then WALK BACK: if the pre-push tip is itself infected (double push, or a
+          # branch that was already dirty) keep stepping to the parent until clean.
+          repo="${{ github.repository }}"; ref="${{ github.ref_name }}"; sha="${{ github.event.before }}"
+          if [ "$sha" = "0000000000000000000000000000000000000000" ]; then
+            gh api -X DELETE "repos/$repo/git/refs/heads/$ref" && { echo "reverted=deleted" >> "$GITHUB_OUTPUT"; exit 0; }
           else
-            gh api -X PATCH "repos/${{ github.repository }}/git/refs/heads/$ref" -f sha="$parent" -F force=true >/dev/null \
-              && { echo "reverted=1" >> "$GITHUB_OUTPUT"; exit 0; }
+            for i in $(seq 1 30); do
+              git fetch -q --depth 2 origin "$sha" 2>/dev/null || break
+              git checkout -q --force "$sha" 2>/dev/null || break
+              if bash "$RUNNER_TEMP/scan.sh" >/dev/null; then
+                gh api -X PATCH "repos/$repo/git/refs/heads/$ref" -f sha="$sha" -F force=true >/dev/null \
+                  && { echo "reverted to ${sha:0:8} (walked back $((i-1)))"; echo "reverted=1" >> "$GITHUB_OUTPUT"; exit 0; }
+                break
+              fi
+              echo "${sha:0:8} also infected — walking back"
+              sha=$(git rev-parse -q --verify "$sha^" 2>/dev/null) || break
+            done
           fi
           echo "::error::REVERT FAILED — payload is STILL on $ref"
           echo "reverted=0" >> "$GITHUB_OUTPUT"
