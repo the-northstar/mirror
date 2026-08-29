@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  issues: write     # to flag unexpected new workflows
 
 jobs:
   watch:
@@ -18,6 +19,21 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - name: Flag newly added workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          added=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- .github/workflows 2>/dev/null | grep -vE 'polinrider-guard.yml|guard-watchdog.yml' || true)
+          [ -z "$added" ] && exit 0
+          echo "::warning::new workflow(s) added: $added"
+          gh issue create --title "⚠️ New workflow added by ${{ github.actor }}: $(echo $added | tr '\n' ' ')" --label security \
+            --body "A new GitHub Actions workflow was added in ${{ github.sha }} by **${{ github.actor }}** on \`${{ github.ref_name }}\`:\n\n\`\`\`\n$added\n\`\`\`\n\nWorkflows can read repository secrets. Confirm this is expected; if not, that account's machine may be compromised." >/dev/null 2>&1 || true
+          [ -n "${DISCORD_WEBHOOK:-}" ] && curl -s -X POST "$DISCORD_WEBHOOK" -H 'Content-Type: application/json' \
+            -d "$(printf '%s' "⚠️ New workflow added in \`${{ github.repository }}\` by \`${{ github.actor }}\`: $added — verify it is legit (workflows can read secrets)." | python3 -c 'import json,sys;print(json.dumps({"content":sys.stdin.read()}))')" >/dev/null 2>&1 || true
       - name: Verify guard still present & intact
         env:
           GH_TOKEN: ${{ secrets.ENFORCER_TOKEN }}
