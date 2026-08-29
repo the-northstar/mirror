@@ -81,24 +81,33 @@ jobs:
 
       - name: Auto-revert the infected push
         if: steps.scan.outputs.detected == '1'
+        id: revert
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
-          # Revert the branch to its parent (the state before this push) so the
-          # payload never survives on the remote. If the parent is also infected,
-          # this still removes THIS push; repeated pushes keep getting reverted.
-          git config user.name "polinrider-guard"
-          git config user.email "guard@users.noreply.github.com"
+          set -uo pipefail
+          # Reset the branch to the pre-push tip via the API. This works even after a
+          # FORCE-push (the old tip is no longer an ancestor, so a shallow checkout
+          # never has it and `git push $parent:branch` dies with "bad object" — that
+          # is exactly how the 2026-08-29 wave survived). New branch => delete it.
           parent="${{ github.event.before }}"
-          if [ -n "$parent" ] && [ "$parent" != "0000000000000000000000000000000000000000" ]; then
-            git push --force origin "$parent:${{ github.ref_name }}" || echo "revert push failed (branch protected?)"
+          ref="${{ github.ref_name }}"
+          if [ "$parent" = "0000000000000000000000000000000000000000" ]; then
+            gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$ref" && { echo "reverted=deleted" >> "$GITHUB_OUTPUT"; exit 0; }
+          else
+            gh api -X PATCH "repos/${{ github.repository }}/git/refs/heads/$ref" -f sha="$parent" -F force=true >/dev/null \
+              && { echo "reverted=1" >> "$GITHUB_OUTPUT"; exit 0; }
           fi
+          echo "::error::REVERT FAILED — payload is STILL on $ref"
+          echo "reverted=0" >> "$GITHUB_OUTPUT"
 
       - name: Open alert issue
         if: steps.scan.outputs.detected == '1'
         uses: actions/github-script@v7
         env:
           FILES: ${{ steps.scan.outputs.files }}
+          REVERTED: ${{ steps.revert.outputs.reverted }}
         with:
           script: |
             const files = process.env.FILES || '';
@@ -106,7 +115,7 @@ jobs:
               owner: context.repo.owner, repo: context.repo.repo,
               title: `🚨 PolinRider payload blocked on push by ${context.actor}`,
               body: `The PolinRider malware was detected in a push by **${context.actor}** `
-                  + `to \`${context.ref}\` (commit ${context.sha.slice(0,8)}) and auto-reverted.\n\n`
+                  + `to \`${context.ref}\` (commit ${context.sha.slice(0,8)}) ` + (process.env.REVERTED === '1' ? 'and auto-reverted.' : process.env.REVERTED === 'deleted' ? 'and the new branch was deleted.' : '**and the REVERT FAILED — the payload is STILL on the branch. Reset it manually NOW.**') + `\n\n`
                   + `**Infected files:**\n\`\`\`\n${files}\n\`\`\`\n\n`
                   + `**Action required:** ${context.actor}'s machine is infected — disinfect it `
                   + `before pushing again, or every push will keep being reverted.`,
