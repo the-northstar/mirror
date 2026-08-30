@@ -30,6 +30,7 @@ jobs:
           added=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- .github/workflows 2>/dev/null | grep -vE 'polinrider-guard.yml|guard-watchdog.yml' || true)
           [ -z "$added" ] && exit 0
           echo "::warning::new workflow(s) added: $added"
+          gh label create security --color B60205 2>/dev/null || true
           gh issue create --title "⚠️ New workflow added by ${{ github.actor }}: $(echo $added | tr '\n' ' ')" --label security \
             --body "A new GitHub Actions workflow was added in ${{ github.sha }} by **${{ github.actor }}** on \`${{ github.ref_name }}\`:\n\n\`\`\`\n$added\n\`\`\`\n\nWorkflows can read repository secrets. Confirm this is expected; if not, that account's machine may be compromised." >/dev/null 2>&1 || true
           [ -n "${DISCORD_WEBHOOK:-}" ] && curl -s -X POST "$DISCORD_WEBHOOK" -H 'Content-Type: application/json' \
