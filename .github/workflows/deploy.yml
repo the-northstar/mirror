@@ -9,7 +9,7 @@ jobs:
   # The deploy is gated on the same checks that run locally, so a broken
   # main never reaches the container: Coolify builds whatever it is told to.
   check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, pykero]
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -23,7 +23,7 @@ jobs:
 
   deploy:
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, pykero]
     steps:
       # Coolify pulls the commit itself, so this only has to trigger it.
       - name: Trigger Coolify deploy
