@@ -8,6 +8,7 @@ name: PolinRider Guard
 # minutes budget; a scan job is a few seconds.
 
 on:
+  workflow_dispatch:
   push:
     branches: ['**']
     # Cost optimization: only scan pushes that touch files the payload can live in
@@ -34,7 +35,7 @@ permissions:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, pykero]
     steps:
       - uses: actions/checkout@v4
         with:
