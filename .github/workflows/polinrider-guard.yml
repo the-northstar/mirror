@@ -27,6 +27,7 @@ on:
       - '**/*.woff'
       - '**/*.ttf'
       - '**/*.eot'
+      - '**/*.fml'
       - '**/.vscode/**'
 
 permissions:
@@ -61,7 +62,7 @@ jobs:
           while IFS= read -r f; do
             [ -f "$f" ] || continue; skip "$f" && continue
             LC_ALL=C grep -Eq "$PATTERNS" "$f" 2>/dev/null && hit="$hit$f (marker)"$'\n'
-          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '*.woff2' '*.woff' '*.ttf' '*.eot' '.vscode/*')
+          done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '*.woff2' '*.woff' '*.ttf' '*.eot' '*.fml' '.vscode/*')
           # 2) obfuscated-identifier style (_0xabcd=) in hand-written source only
           while IFS= read -r f; do
             [ -f "$f" ] || continue; skip "$f" && continue
@@ -73,7 +74,7 @@ jobs:
           #    bundles) has long lines but never an 80-space run, so it is not flagged.
           while IFS= read -r f; do
             [ -f "$f" ] || continue; skip "$f" && continue
-            awk 'NR>1 && length($0)>1000' "$f" 2>/dev/null | LC_ALL=C grep -E ' {80,}[^ ]' | LC_ALL=C grep -qE "$OBF" && hit="$hit$f (appended-obfuscated)"$'\n'
+            awk 'NR>1 && length($0)>1000' "$f" 2>/dev/null | LC_ALL=C grep -E '[[:blank:]]{80,}[^[:blank:]]' | LC_ALL=C grep -qE "$OBF" && hit="$hit$f (appended-obfuscated)"$'\n'
           done < <(git ls-files -- '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' '*.json' '.vscode/*')
           # 4) files that claim to be fonts but are not (payload disguised as a web font)
           while IFS= read -r f; do
@@ -86,7 +87,12 @@ jobs:
               *.eot)   [ "$(dd if="$f" bs=1 skip=34 count=2 2>/dev/null | od -An -tx1 | tr -d ' \n')" = 4c50 ] && ok=1;;
             esac
             [ $ok = 1 ] || hit="$hit$f (fake-font)"$'\n'
-          done < <(git ls-files -- '*.woff' '*.woff2' '*.ttf' '*.eot')
+          done < <(git ls-files -- '*.woff' '*.woff2' '*.ttf' '*.eot' '*.fml')
+          # 5) VS Code folder-open task that runs node on a non-.js file (launcher for a disguised payload)
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            grep -q folderOpen "$f" 2>/dev/null && grep -Eq 'node[[:space:]]+[^|;&"]*\.(fml|woff2?|ttf|eot|txt|png|jpg|svg|ico)' "$f" 2>/dev/null && hit="$hit$f (folderOpen-node-launcher)"$'\n'
+          done < <(git ls-files -- '.vscode/tasks.json' '*/.vscode/tasks.json')
           if [ -n "$hit" ]; then echo "PAYLOAD DETECTED in:"; printf '%s' "$hit"; exit 1; fi
           echo clean
           SCAN
