@@ -95,6 +95,25 @@ export function effectsFor(
   return effects
 }
 
+/**
+ * Glow that renders each finish, inside the bands formulaFor() uses to name
+ * them (matte below 0.35, dewy above 0.58).
+ */
+const FINISH_GLOW: Record<Formula['finish'], number> = { matte: 0.2, natural: 0.5, dewy: 0.8 }
+
+/**
+ * Her formula, worn in a product's own finish.
+ *
+ * The coverage audit renders what a range actually stocks next to what her
+ * skin was prescribed. Coverage stays hers — it is a reading, not a property of
+ * the bottle — but the finish has to be the product's, or a matte base on dry
+ * skin would render with the glow it does not have and the gap would vanish
+ * from the very picture meant to show it.
+ */
+export function formulaAsWorn(formula: Formula, finish: Formula['finish']): Formula {
+  return { ...formula, finish, glowIntensity: FINISH_GLOW[finish] }
+}
+
 /** A shopper-facing summary of what the render is showing and why. */
 export function explainEffects(formula: Formula, palette: Palette): string {
   const finish =

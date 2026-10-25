@@ -6,7 +6,8 @@
  * validation, so a feed row and a pushed row are held to the same standard —
  * a row without a resolvable colour is rejected rather than ranked as grey.
  */
-import { finishFrom, loadShopify, type Product } from './catalogue'
+import { finishFrom, loadShopify, namedColorHex, type Product } from './catalogue'
+import { colorName } from './color'
 import { parseCsv } from './products'
 
 export type FeedKind = 'json' | 'csv' | 'shopify'
@@ -47,8 +48,57 @@ export async function fetchFeed(url: string, kind: FeedKind = detectKind(url)): 
   return rows as FeedRow[]
 }
 
+/**
+ * Rows -> products for a one-off audit, stored nowhere.
+ *
+ * Held to the same standard as a pushed row: no resolvable colour, no product.
+ * Only the aisles the audit reads are kept; the rest are counted, not lost
+ * silently, so a sheet of shirts does not come back as "no foundation" with no
+ * explanation.
+ */
+const AUDITED: Product['aisle'][] = ['foundation', 'blush', 'lipstick']
+
+export function rowsToCatalogue(rows: FeedRow[]): {
+  products: Product[]
+  rejected: Array<{ name: string; why: string }>
+  skipped: number
+} {
+  const products: Product[] = []
+  const rejected: Array<{ name: string; why: string }> = []
+  let skipped = 0
+  for (const [i, row] of rows.entries()) {
+    const name = String(row.name ?? '').trim()
+    const aisle = String(row.aisle ?? '').trim().toLowerCase() as Product['aisle']
+    if (!AUDITED.includes(aisle)) {
+      skipped += 1
+      continue
+    }
+    const hex = /^#[0-9a-f]{6}$/i.test(row.hex ?? '')
+      ? row.hex!.toLowerCase()
+      : row.colorWord
+        ? namedColorHex(row.colorWord)
+        : null
+    if (!name || !hex) {
+      rejected.push({ name: name || `Row ${i + 2}`, why: name ? 'No colour we could resolve.' : 'No name.' })
+      continue
+    }
+    products.push({
+      id: `audit-${i}`,
+      aisle,
+      brand: String(row.brand ?? '').trim() || 'Your range',
+      name,
+      hex,
+      colorName: colorName(hex),
+      shadeName: row.shadeName,
+      tags: row.tags,
+      ...(aisle === 'foundation' && finishFrom(row.finish) ? { finish: finishFrom(row.finish) } : {}),
+    })
+  }
+  return { products, rejected, skipped }
+}
+
 /** Header-driven so column order does not matter, only the names. */
-function csvToRows(text: string): FeedRow[] {
+export function csvToRows(text: string): FeedRow[] {
   const grid = parseCsv(text).filter((r) => r.some((c) => c.trim() !== ''))
   if (grid.length < 2) throw new Error('The CSV has a header but no rows.')
 

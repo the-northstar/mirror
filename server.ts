@@ -45,6 +45,7 @@ import {
   placeOrder,
   productsForAisle,
   productsForStore,
+  productsOfStore,
   replaceStoreProducts,
   setStoreFeed,
   storeByKey,
@@ -52,7 +53,9 @@ import {
   type Aisle,
   type Product,
 } from './src/lib/catalogue'
-import { detectKind, fetchFeed, type FeedKind } from './src/lib/feed'
+import { csvToRows, detectKind, fetchFeed, rowsToCatalogue, type FeedKind } from './src/lib/feed'
+import { audit, placeDemand, placeFace } from './src/lib/coverage'
+import { demandFor, MIRROR, recordDemand } from './src/lib/demand'
 import {
   rankBlush,
   rankClothes,
@@ -74,10 +77,12 @@ import {
 } from './src/lib/audience'
 import { localFor } from './src/lib/localCatalogue'
 import { judge, topMatches } from './src/lib/judge'
-import { effectsFor, explainEffects, concealerFrom } from './src/lib/makeup'
+import { effectsFor, explainEffects, concealerFrom, formulaAsWorn } from './src/lib/makeup'
 import productsRoute, {
   ownedProducts,
+  persistDemand,
   persistOrders,
+  restoreDemandFromDisk,
   restoreOrdersFromDisk,
   restoreStoresFromDisk,
   persistStores,
@@ -528,6 +533,14 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     const palette = paletteFor(skinHex)
     const formula = formulaFor(concerns)
 
+    // One more shopper the coverage audit can place against a range: the
+    // measured colour and the prescribed finish, nothing that names her.
+    // Kept under the embedding store when there is one, so a retailer sees
+    // their own shoppers rather than everyone's.
+    if (recordDemand(storeId ?? MIRROR, skinHex, formula.finish)) {
+      void persistDemand().catch((err) => console.warn('[demand]', (err as Error).message))
+    }
+
     const [foundations, lipsticks, blushes, skincare, clothes] = await Promise.all([
       shelf('foundation', () => loadMakeup('foundation', req.signal)),
       shelf('lipstick', () => loadMakeup('lipstick', req.signal)),
@@ -747,6 +760,112 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
         [...shelves.entries()].map(([k, v]) => [k, v.fellBack]),
       ),
     })
+  },
+
+  /**
+   * The coverage audit: a whole range against every skin tone.
+   *
+   * Three sources, and none of them is "a named brand from the public feed".
+   * That feed's swatch hexes run far too light at the deep end — measured, it
+   * gave Fenty and IMAN no deep shades at all — so auditing a real brand from
+   * it would publish gaps the brand does not have.
+   *
+   * A face is optional. When the browser has a scan it sends the reading, not
+   * the photo, and gets back where that face lands plus the effects to render
+   * both what the range stocks and what the face was prescribed; the renders
+   * go through the ordinary makeup try-on route.
+   */
+  'POST /api/audit': async (req) => {
+    const body = (await req.json().catch(() => null)) as {
+      source?: string
+      storeId?: string
+      csv?: string
+      face?: { skinHex?: string; concerns?: ConcernOut[] }
+    } | null
+
+    let products: Product[]
+    let label: string
+    let note: string
+    let demandKey: string | null = null
+    let intake: { rejected: Array<{ name: string; why: string }>; skipped: number } | null = null
+
+    if (body?.source === 'mirror') {
+      const [foundations, lipsticks, blushes] = await Promise.all([
+        shelf('foundation', () => loadMakeup('foundation', req.signal)),
+        shelf('lipstick', () => loadMakeup('lipstick', req.signal)),
+        shelf('blush', () => loadMakeup('blush', req.signal)),
+      ])
+      // The same three sources a shopper is matched from: the public feed,
+      // the committed catalogue and every listed store.
+      const extra = (['foundation', 'lipstick', 'blush'] as const).flatMap((a) => [
+        ...localFor(a),
+        ...productsForAisle(a),
+      ])
+      products = [...foundations, ...lipsticks, ...blushes, ...extra]
+      label = "Mirror's own shelves"
+      note =
+        "Every shade a shopper can be matched to in this app: the public makeup-api feed, Mirror's committed catalogue and stores listed here. Colours are as each source publishes them, and public swatch colours are approximate — read this as an audit of these shelves, not a verdict on any brand."
+      demandKey = MIRROR
+    } else if (body?.source === 'store') {
+      if (!body.storeId) return json({ error: 'Missing store.' }, 400)
+      // Owner products load lazily from disk; a store's audit must see them.
+      await ownedProducts().catch(() => [])
+      products = productsOfStore(body.storeId)
+      label = getStore(body.storeId)?.name ?? 'Your store'
+      note = 'Your catalogue as shoppers see it, including anything pushed through the SDK.'
+      demandKey = body.storeId
+    } else if (body?.source === 'csv') {
+      if (typeof body.csv !== 'string' || !body.csv.trim()) {
+        return json({ error: 'That file is empty.' }, 400)
+      }
+      if (body.csv.length > 2 * 1024 * 1024) return json({ error: 'That file is over 2 MB.' }, 400)
+      let rows
+      try {
+        rows = csvToRows(body.csv)
+      } catch (err) {
+        return json({ error: (err as Error).message }, 400)
+      }
+      const read = rowsToCatalogue(rows.slice(0, 5000))
+      products = read.products
+      intake = { rejected: read.rejected.slice(0, 20), skipped: read.skipped }
+      label = 'Your range'
+      note = 'Audited from the file you uploaded. Nothing in it was stored.'
+    } else {
+      return json({ error: 'Choose what to audit: mirror, store or csv.' }, 400)
+    }
+
+    const report = audit(products)
+    const demand = demandKey ? placeDemand(products, demandFor(demandKey)) : null
+
+    let face = null
+    const f = body.face
+    if (f?.skinHex && /^#[0-9a-f]{6}$/i.test(f.skinHex)) {
+      const concerns = Array.isArray(f.concerns) ? f.concerns : []
+      const placed = placeFace(products, f.skinHex, concerns)
+      const prescribed = formulaFor(concerns)
+      const stocked = placed.closest
+      // An unstated finish renders natural and says so, rather than borrowing
+      // the finish she needed and drawing a gap out of the picture.
+      const wornAs = stocked?.finish ?? 'natural'
+      face = {
+        skinHex: f.skinHex,
+        ...placed,
+        renders: {
+          needed: {
+            label: `What this face was prescribed: ${f.skinHex}, ${placed.need}`,
+            effects: effectsFor(prescribed, f.skinHex),
+          },
+          stocked: stocked
+            ? {
+                label: `Closest you stock: ${stocked.name}${stocked.shadeName ? ` in ${stocked.shadeName}` : ''} — ${stocked.dE.toFixed(1)} ΔE, ${stocked.finish ?? 'finish unstated, shown natural'}`,
+                effects: effectsFor(formulaAsWorn(prescribed, wornAs), stocked.hex),
+              }
+            : null,
+        },
+      }
+    }
+
+    return json({ label, note, intake, audit: report, demand, face })
   },
 
   /** Per-feed row counts and which shelves fell back to the snapshot. */
@@ -1014,6 +1133,7 @@ Bun.serve({
 await ownedProducts().catch(() => [])
 await restoreOrdersFromDisk()
 await restoreStoresFromDisk()
+await restoreDemandFromDisk()
 
 console.log(
   `  stylist layer: ${process.env.GEMINI_API_KEY ? 'on' : 'off (set GEMINI_API_KEY to enable)'}`,

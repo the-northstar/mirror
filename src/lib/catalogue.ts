@@ -502,6 +502,21 @@ export const productsForAisle = (aisle: Aisle): Product[] =>
 export const productsForStore = (storeId: string): Product[] =>
   storeProducts.get(storeId) ?? []
 
+/**
+ * Everything one store sells, however it arrived.
+ *
+ * A signed-in owner's form products sit on the shared owner shelf while their
+ * SDK pushes sit on their own, so a store's catalogue is found by the storeId
+ * every row carries rather than by which shelf it landed on.
+ */
+export function productsOfStore(storeId: string): Product[] {
+  const seen = new Map<string, Product>()
+  for (const p of [...storeProducts.values()].flat()) {
+    if (p.storeId === storeId) seen.set(p.id, p)
+  }
+  return [...seen.values()]
+}
+
 export const findProduct = (id: string): Product | undefined =>
   [...storeProducts.values()].flat().find((p) => p.id === id)
 

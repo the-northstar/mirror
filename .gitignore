@@ -46,5 +46,8 @@ android/app/src/main/assets/public
 # Store order ledger (file-backed).
 orders.json
 
+# Scanned skin colours per store, for the coverage audit (file-backed).
+demand.json
+
 # Store product photos (file-backed).
 uploads/

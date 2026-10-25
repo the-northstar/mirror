@@ -31,6 +31,7 @@ import {
   productId,
   type OwnerProduct,
 } from '../src/lib/products.ts'
+import { restoreDemand, snapshotDemand, type DemandSnapshot } from '../src/lib/demand.ts'
 
 // ponytail: a JSON file is the whole database. Swap for Postgres when two
 // processes write at once or the catalogue outgrows one file read.
@@ -45,6 +46,7 @@ const DATA_DIR = process.env.DATA_DIR ?? '.'
 const STORE = join(DATA_DIR, 'products.json')
 const ORDERS = join(DATA_DIR, 'orders.json')
 const STORES = join(DATA_DIR, 'stores.json')
+const DEMAND = join(DATA_DIR, 'demand.json')
 const UPLOADS = join(DATA_DIR, 'uploads')
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 const PHOTO_TYPES: Record<string, string> = {
@@ -114,6 +116,23 @@ export async function restoreStoresFromDisk(): Promise<void> {
 
 export async function persistStores(): Promise<void> {
   await writeFile(STORES, JSON.stringify(snapshotStores(), null, 2))
+}
+
+/**
+ * The scanned-skin ledger the coverage audit places against a range. Colours
+ * and finishes only (see demand.ts), so this file holds nothing that names or
+ * pictures a shopper.
+ */
+export async function restoreDemandFromDisk(): Promise<void> {
+  try {
+    restoreDemand(JSON.parse(await readFile(DEMAND, 'utf8')) as DemandSnapshot)
+  } catch {
+    // No file yet on a first run.
+  }
+}
+
+export async function persistDemand(): Promise<void> {
+  await writeFile(DEMAND, JSON.stringify(snapshotDemand()))
 }
 
 /**

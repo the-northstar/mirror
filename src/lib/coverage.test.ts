@@ -183,3 +183,30 @@ describe('real faces', () => {
     expect(Object.keys(report.missed[0]).sort()).toEqual(['dE', 'finish', 'skinHex', 'verdict'])
   })
 })
+
+describe('an uploaded range', () => {
+  test('is held to the same standard as a pushed row, and stored nowhere', async () => {
+    const { csvToRows, rowsToCatalogue } = await import('./feed')
+    const rows = csvToRows(
+      [
+        'name,aisle,hex,colour,shade,finish',
+        'Skin Foundation,foundation,#a07e56,,110,Dewy',
+        'Skin Foundation,foundation,,camel,120,',
+        'Mystery Base,foundation,,,130,',
+        'Linen Shirt,clothes,#f2f3f5,,,',
+        'Petal Blush,blush,#e8a0a8,,,',
+      ].join('\n'),
+    )
+    const read = rowsToCatalogue(rows)
+    expect(read.products.map((p) => [p.aisle, p.shadeName, p.finish])).toEqual([
+      ['foundation', '110', 'dewy'],
+      ['foundation', '120', undefined],
+      ['blush', undefined, undefined],
+    ])
+    // A colour word is resolved; a row with no colour is refused, with a reason.
+    expect(read.products[1].hex).toMatch(/^#[0-9a-f]{6}$/)
+    expect(read.rejected).toEqual([{ name: 'Mystery Base', why: 'No colour we could resolve.' }])
+    // The shirt is counted, not silently lost.
+    expect(read.skipped).toBe(1)
+  })
+})
