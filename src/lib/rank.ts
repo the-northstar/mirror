@@ -398,8 +398,7 @@ export function rankLipstick(products: Product[], shopper: Shopper): Ranked[] {
         ? 0
         : bandCost(shift, { ideal: 28, low: 10, high: 55, slope: 0.22 })
 
-    // Chalky pales read grey on deep skin; deep skin is depth 1-3.
-    const chalky = palette.depth <= 3 && lch.L > 72 && lch.C < 25 ? 10 : 0
+    const chalky = readsChalky(p.hex, palette.depth) ? 10 : 0
 
     const score = arc + side + payoff + chalky
 
@@ -423,6 +422,37 @@ export function rankLipstick(products: Product[], shopper: Shopper): Ranked[] {
 }
 
 /**
+ * Pale, low-pigment lip colour reads grey on deep skin (depth 1-3).
+ *
+ * Exported because the catalogue audit asks the same question of a whole range
+ * that this ranker asks of one shopper, and two copies of a threshold drift.
+ */
+export function readsChalky(hex: string, depth: number): boolean {
+  const { L, C } = hexToLch(hex)
+  return depth <= 3 && L > 72 && C < 25
+}
+
+/** Where a blush stops vanishing and where it starts sitting on top. */
+const BLUSH_BAND = { ideal: 22, low: 10, high: 42, slope: 0.3 }
+
+export type BlushOn = 'flush' | 'vanishes' | 'sits-on-top' | 'not-a-blush'
+
+/**
+ * What one blush does on one skin, by the same bands rankBlush scores.
+ *
+ * The audit needs the verdict rather than the score: "would this read as a
+ * flush on tone 9" is a yes or a no, and it must be the same yes the shopper
+ * side would have given.
+ */
+export function blushOn(blushHex: string, skinHex: string): BlushOn {
+  if (outsideArc(hexToLch(blushHex).h, BLUSH_SPAN) * 0.9 > 10) return 'not-a-blush'
+  const shift = deltaE(hexToLab(skinHex), hexToLab(blushHex))
+  if (shift < BLUSH_BAND.low) return 'vanishes'
+  if (shift > BLUSH_BAND.high) return 'sits-on-top'
+  return 'flush'
+}
+
+/**
  * Blush: a flush that is visible without being a stripe.
  *
  * Judged against her SKIN, not against a wardrobe palette. Two failures bound
@@ -441,7 +471,7 @@ export function rankBlush(products: Product[], shopper: Shopper): Ranked[] {
     const side = sideMiss(lch, palette) * 18
 
     const shift = deltaE(skin, hexToLab(p.hex))
-    const visibility = bandCost(shift, { ideal: 22, low: 10, high: 42, slope: 0.3 })
+    const visibility = bandCost(shift, BLUSH_BAND)
 
     const score = arc + side + visibility
 
@@ -449,9 +479,9 @@ export function rankBlush(products: Product[], shopper: Shopper): Ranked[] {
       reason:
       arc > 10
         ? `Not in the range of hues that read as a flush, so it is listed but not recommended.`
-        : shift < 10
+        : shift < BLUSH_BAND.low
           ? `Only ${shift.toFixed(1)} ΔE from your measured skin colour, so it would disappear rather than lift the cheek.`
-          : shift > 42
+          : shift > BLUSH_BAND.high
             ? `Much stronger than your measured skin colour (${shift.toFixed(0)} ΔE), so it sits on the face rather than in it.`
             : side > WORTH_SAYING
               ? `Lifts your measured skin colour by ${shift.toFixed(1)} ΔE, which reads as a flush, though it leans away from your ${palette.undertone} undertone.`
