@@ -31,7 +31,7 @@ out matte on oily skin and dewy on dry, and the shelves reorder around the
 reading rather than around a bestseller list.
 
 **Which YouCam APIs do what** is set out in [YouCam APIs used](#youcam-apis-used)
-— ten endpoints, each named with the decision it changes.
+— thirteen endpoints, each named with the decision it changes.
 
 **The merchant side** (`/store`) is the only screen behind a sign-in. It is a
 free self-serve sign-up, and the shopper flow above never touches it. Running
