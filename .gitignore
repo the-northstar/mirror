@@ -22,8 +22,7 @@ dev-dist
 .vercel
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+temp_auto_push.bat
 .idea
 .DS_Store
 *.suo
@@ -48,3 +47,5 @@ orders.json
 
 # Store product photos (file-backed).
 uploads/
+branch_structure.json
+temp_interactive_push.bat

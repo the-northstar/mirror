@@ -57,7 +57,7 @@ hands you a list. Nothing you can measure about your face — oiliness, moisture
 redness, texture, face shape — enters the decision, so the right colour arrives
 in the wrong formula and gets returned or abandoned in a drawer.
 
-That is the whole build. Ten YouCam endpoints feed one decision.
+That is the whole build. Thirteen YouCam endpoints feed one decision.
 
 ### The problems this solves
 
@@ -145,7 +145,9 @@ And on the other side of the counter:
 | `POST /s2s/v2.1/task/hair-transfer` | A hairstyle rendered on the shopper |
 | `POST /s2s/v2.0/task/look-vto` | A whole look in one pass (wired; no shelf, see below) |
 | `POST /s2s/v2.0/task/skin-simulation` | The same face after a course of treatment |
-| `GET /s2s/v2.x/task/template/*` | YouCam's own garment, look and hair catalogues |
+| `GET /s2s/v2.0/task/template/cloth` | YouCam's garment catalogue |
+| `GET /s2s/v2.0/task/template/look-vto` | YouCam's artist look catalogue |
+| `GET /s2s/v2.1/task/template/hair-transfer` | YouCam's hairstyle catalogue |
 
 Base URL `https://yce-api-01.makeupar.com`, authenticated with
 `Authorization: Bearer <API_KEY>`.

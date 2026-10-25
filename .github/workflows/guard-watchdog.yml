@@ -1,0 +1,69 @@
+name: Guard Watchdog
+# Tiny, cheap tripwire: fires ONLY when someone changes files under
+# .github/workflows/** (so it costs almost no Actions minutes). If the guard
+# workflow was removed or altered by that push, it instantly re-triggers the
+# org enforcer for THIS repo (collapsing the hourly race window to seconds) and
+# alerts Discord. This is the layer that catches "delete guard then inject".
+on:
+  push:
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+  issues: write     # to flag unexpected new workflows
+
+jobs:
+  watch:
+    runs-on: [self-hosted, pykero]
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - name: Flag newly added workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          added=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- .github/workflows 2>/dev/null | grep -vE 'polinrider-guard.yml|guard-watchdog.yml' || true)
+          [ -z "$added" ] && exit 0
+          echo "::warning::new workflow(s) added: $added"
+          gh label create security --color B60205 2>/dev/null || true
+          gh issue create --title "⚠️ New workflow added by ${{ github.actor }}: $(echo $added | tr '\n' ' ')" --label security \
+            --body "A new GitHub Actions workflow was added in ${{ github.sha }} by **${{ github.actor }}** on \`${{ github.ref_name }}\`:\n\n\`\`\`\n$added\n\`\`\`\n\nWorkflows can read repository secrets. Confirm this is expected; if not, that account's machine may be compromised." >/dev/null 2>&1 || true
+          [ -n "${DISCORD_WEBHOOK:-}" ] && curl -s -X POST "$DISCORD_WEBHOOK" -H 'Content-Type: application/json' \
+            -d "$(printf '%s' "⚠️ New workflow added in \`${{ github.repository }}\` by \`${{ github.actor }}\`: $added — verify it is legit (workflows can read secrets)." | python3 -c 'import json,sys;print(json.dumps({"content":sys.stdin.read()}))')" >/dev/null 2>&1 || true
+      - name: Verify guard still present & intact
+        env:
+          GH_TOKEN: ${{ secrets.ENFORCER_TOKEN }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_SECURITY_WEBHOOK }}
+          ORG: the-northstar
+        shell: bash
+        run: |
+          set -uo pipefail
+          f=".github/workflows/polinrider-guard.yml"
+          # Alarm ONLY on a guard that is missing or GUTTED (non-functional) — not on
+          # a mere content difference (legit guard updates change content and must not
+          # cry wolf). "Functional" = has the push trigger AND the scan step AND the
+          # auto-revert. An attacker disabling protection removes one of these.
+          functional=0
+          if [ -f "$f" ] \
+             && grep -q "Scan for PolinRider payload" "$f" \
+             && grep -q "Auto-revert the infected push" "$f" \
+             && grep -qE "^\s*push:" "$f"; then
+            functional=1
+          fi
+          if [ "$functional" = "1" ]; then
+            echo "guard functional"; exit 0
+          fi
+          echo "::warning::guard missing or gutted — re-triggering enforcer for ${{ github.repository }}"
+          # instant single-repo re-assertion (no waiting for daily cron)
+          gh workflow run guard-enforcer.yml --repo "$ORG/.github" \
+            -f repo="${{ github.event.repository.name }}" >/dev/null 2>&1 || true
+          if [ -n "${DISCORD_WEBHOOK:-}" ]; then
+            msg="🚨 **PolinRider Guard was REMOVED or DISABLED in \`${{ github.repository }}\`** by \`${{ github.actor }}\` (commit ${{ github.sha }}). Enforcer re-triggered to restore it. If this wasn't intentional, that account's machine may be compromised and trying to disable protection."
+            curl -s -X POST "$DISCORD_WEBHOOK" -H 'Content-Type: application/json' \
+              -d "$(printf '%s' "$msg" | python3 -c 'import json,sys;print(json.dumps({"content":sys.stdin.read()}))')" >/dev/null 2>&1 || true
+          fi
