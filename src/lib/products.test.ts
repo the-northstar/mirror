@@ -212,3 +212,30 @@ test('the trend keeps empty days so a gap reads as a gap', () => {
   expect(series.at(-2)).toEqual({ day: '2026-08-15', revenue: 0, orders: 0 })
   expect(series.reduce((n, d) => n + d.revenue, 0)).toBe(170)
 })
+
+test('a stated finish is kept for foundations, normalised, and only there', () => {
+  const base = { ...OK, name: 'Skin Foundation', aisle: 'foundation', finish: ' Dewy ' }
+  expect(normalizeProduct(base, 'u').finish).toBe('dewy')
+  // A shirt has no finish to state; carrying one would mislead the audit.
+  expect(normalizeProduct({ ...OK, finish: 'matte' }, 'u').finish).toBeUndefined()
+  // Empty is allowed: the product is listed, its formula is simply unstated.
+  expect(normalizeProduct({ ...base, finish: '' }, 'u').finish).toBeUndefined()
+})
+
+test('a misspelled finish is refused rather than silently dropped', () => {
+  expect(() =>
+    normalizeProduct({ ...OK, aisle: 'foundation', finish: 'glossy' }, 'u'),
+  ).toThrow(/Finish must be one of/)
+})
+
+test('the spreadsheet finish column reaches the product', () => {
+  const { products, errors } = rowsToProducts(
+    [
+      ['name', 'aisle', 'hex', 'image', 'finish'],
+      ['Skin Foundation 110', 'foundation', '#d7bd96', 'https://cdn.example.com/f.png', 'Matte'],
+    ],
+    'u',
+  )
+  expect(errors).toEqual([])
+  expect(products[0].finish).toBe('matte')
+})

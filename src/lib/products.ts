@@ -32,8 +32,16 @@ export const AISLES: Product['aisle'][] = [
 
 /** Spreadsheet columns, in the order the template writes them. */
 export const COLUMNS = [
-  'name', 'brand', 'aisle', 'hex', 'image', 'price', 'url', 'garmentCategory',
+  'name', 'brand', 'aisle', 'hex', 'image', 'price', 'url', 'garmentCategory', 'finish',
 ] as const
+
+/**
+ * A foundation's finish, as the owner states it. Optional, but it is the only
+ * way the coverage audit can judge formula for a product whose name does not
+ * say. Kept local rather than imported from catalogue.ts, which would pull a
+ * runtime module through Node's type stripper.
+ */
+export const FINISHES = ['matte', 'natural', 'dewy'] as const
 
 /** What YouCam renders a garment as. 'auto' lets it guess from the photo. */
 export const GARMENT_CATEGORIES = [
@@ -49,6 +57,7 @@ export interface ProductInput {
   image?: unknown
   price?: unknown
   url?: unknown
+  finish?: unknown
 }
 
 /**
@@ -96,6 +105,13 @@ export function normalizeProduct(input: unknown, ownerId: string): OwnerProduct 
     throw new Error('Price must be a number.')
   }
 
+  // Refused rather than dropped: a typo'd finish would otherwise vanish and
+  // the audit would report the product as unstated with no hint why.
+  const finish = str(p.finish).toLowerCase()
+  if (finish && !(FINISHES as readonly string[]).includes(finish)) {
+    throw new Error(`Finish must be one of: ${FINISHES.join(', ')} — or left empty.`)
+  }
+
   return {
     // Owner-scoped id: re-adding the same name updates rather than duplicating,
     // and one owner can never collide with another's product.
@@ -111,6 +127,7 @@ export function normalizeProduct(input: unknown, ownerId: string): OwnerProduct 
     image,
     ...(url ? { url } : {}),
     ...(aisle === 'clothes' ? { garmentCategory } : {}),
+    ...(aisle === 'foundation' && finish ? { finish: finish as (typeof FINISHES)[number] } : {}),
     ...(price !== undefined ? { price } : {}),
     ownerId,
   }

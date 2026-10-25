@@ -365,3 +365,16 @@ describe('colour naming from merchant words', () => {
     expect(namedColorHex('Limited Edition 3')).toBeNull()
   })
 })
+
+describe('stated finishes from feeds and SDK pushes', () => {
+  test('addProducts keeps a recognised finish on a foundation and nothing else', async () => {
+    const { createStore, addProducts } = await import('./catalogue')
+    const store = createStore({ name: 'Finish Test', contactEmail: 'a@b.c' })
+    const { added } = addProducts(store.id, [
+      { name: 'Base 1', aisle: 'foundation', hex: '#d7bd96', finish: 'natural' },
+      { name: 'Base 2', aisle: 'foundation', hex: '#a07e56', finish: 'shiny' as never },
+      { name: 'Tee', aisle: 'clothes', hex: '#2f5d62', finish: 'matte' },
+    ])
+    expect(added.map((p) => p.finish)).toEqual(['natural', undefined, undefined])
+  })
+})

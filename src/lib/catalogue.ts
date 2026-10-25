@@ -32,6 +32,18 @@ export interface Product {
   tags?: string[]
   /** upper_body / full_body / shoes / outer. Try-on renders wrongly without it. */
   garmentCategory?: string
+  /**
+   * A base's finish, when the merchant states it. Beats anything read from the
+   * name: the coverage audit can only judge formula for products whose finish
+   * someone published.
+   */
+  finish?: 'matte' | 'natural' | 'dewy'
+}
+
+/** Only a stated, recognised finish survives; anything else stays unset. */
+export const finishFrom = (v: unknown): Product['finish'] => {
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : ''
+  return s === 'matte' || s === 'natural' || s === 'dewy' ? s : undefined
 }
 
 const MAKEUP_API = 'https://makeup-api.herokuapp.com/api/v1/products.json'
@@ -459,6 +471,7 @@ export function addProducts(
       storeId,
       stock: row.stock,
       tags: row.tags ?? [],
+      ...(row.aisle === 'foundation' && finishFrom(row.finish) ? { finish: finishFrom(row.finish) } : {}),
     })
   }
 

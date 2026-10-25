@@ -226,6 +226,7 @@ Not for large catalogues — every shopper's browser re-sends the list.
 | `stock` | no | |
 | `tags` | no | Free text the ranker reads: ingredients, finish, metal. |
 | `garmentCategory` | clothes only | `upper_body`, `full_body`, `shoes`, `outer`, `auto`. |
+| `finish` | foundation only | `matte`, `natural` or `dewy`. Lets the coverage audit judge formula, not just shade; read from the name when absent. |
 
 CSV uses the same names as its header row; column order does not matter.
 

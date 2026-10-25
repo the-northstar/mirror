@@ -20,6 +20,7 @@ import {
 import {
   AISLES,
   COLUMNS,
+  FINISHES,
   GARMENT_CATEGORIES,
   salesByDay,
   summariseCatalogue,
@@ -36,6 +37,7 @@ type Row = {
   hex: string
   price: string
   garmentCategory: string
+  finish: string
   /** The chosen file, and a blob URL for the preview. */
   photo: File | null
   preview: string
@@ -48,6 +50,7 @@ const BLANK: Row = {
   hex: '#2f5d62',
   price: '',
   garmentCategory: 'auto',
+  finish: '',
   photo: null,
   preview: '',
 }
@@ -391,6 +394,27 @@ function Owner() {
                     <span className="tiny">
                       Guessed from the photo unless you say. A dress set to a top
                       renders as a top.
+                    </span>
+                  </label>
+                )}
+
+                {row.aisle === 'foundation' && (
+                  <label>
+                    Finish
+                    <select
+                      value={row.finish}
+                      onChange={(e) => set(i, 'finish', e.target.value)}
+                    >
+                      <option value="">Not stated</option>
+                      {FINISHES.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="tiny">
+                      Oily skin is prescribed matte, dry skin dewy. Unstated, the
+                      shade can be matched but the formula cannot.
                     </span>
                   </label>
                 )}

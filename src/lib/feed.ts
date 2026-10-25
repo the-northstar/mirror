@@ -6,7 +6,7 @@
  * validation, so a feed row and a pushed row are held to the same standard —
  * a row without a resolvable colour is rejected rather than ranked as grey.
  */
-import { loadShopify, type Product } from './catalogue'
+import { finishFrom, loadShopify, type Product } from './catalogue'
 import { parseCsv } from './products'
 
 export type FeedKind = 'json' | 'csv' | 'shopify'
@@ -74,6 +74,7 @@ function csvToRows(text: string): FeedRow[] {
       image: at(row, 'image'),
       url: at(row, 'url'),
       garmentCategory: at(row, 'garmentcategory'),
+      finish: finishFrom(at(row, 'finish')),
       tags: tags ? tags.split(/[;|]/).map((t) => t.trim()).filter(Boolean) : undefined,
     }
   })
