@@ -122,6 +122,43 @@ export default function Audit({ scan, storeId }: { scan?: ScanForAudit | null; s
             formula, with the same matching Mirror uses for shoppers. No model, no guessing —
             every line names the measurement behind it.
           </p>
+          <ul className="evidence" aria-label="Why this matters">
+            <li>
+              <strong>41%</strong>
+              <span>
+                of online beauty shoppers have returned an item because it was the wrong shade;
+                over 60% skipped a purchase because they could not tell which to pick.
+              </span>
+              <a href="https://blog.google/products/shopping/shopping-inspiration-insights/" target="_blank" rel="noreferrer">
+                Google, 2022
+              </a>
+            </li>
+            <li>
+              <strong>56%</strong>
+              <span>
+                of women at Monk tones 6–10 find complexion products hard to match; 61% of those
+                with darker skin have dropped a brand over its shade range.
+              </span>
+              <a href="https://benchmarkingcompany.com/news/shade-mismatch-inclusivity-2026-infographic-series-1/" target="_blank" rel="noreferrer">
+                The Benchmarking Company, 2026
+              </a>
+            </li>
+            <li>
+              <strong>4%</strong>
+              <span>
+                of 6,816 US foundation shades sit nearest the three deepest Monk tones, and
+                two-thirds of all shades never name their finish.
+              </span>
+              <a href="https://pudding.cool/2021/03/foundation-names/" target="_blank" rel="noreferrer">
+                Our analysis of The Pudding's 2021 dataset
+              </a>
+            </li>
+          </ul>
+          <p className="tiny evidence-note">
+            The last figure is ours: each swatch placed at its nearest Monk tone with the audit's
+            own colour maths, and finish read from the product name. Retail swatch colours run
+            light, so it is a rough proxy that likely flatters the deep end.
+          </p>
         </header>
       )}
 
@@ -790,8 +827,12 @@ function Method() {
       <summary>How this is measured</summary>
       <div className="stack tiny">
         <p>
-          <strong>The panel.</strong> The ten tones of the Monk Skin Tone Scale (Dr. Ellis Monk,
-          published by Google under CC BY 4.0), with points laid between them so no skin colour
+          <strong>The panel.</strong> The ten tones of the{' '}
+          <a href="https://skintone.google/" target="_blank" rel="noreferrer">
+            Monk Skin Tone Scale
+          </a>{' '}
+          (Dr. Ellis Monk, 2019; released by Google in 2022 under CC BY 4.0), with points laid
+          between them so no skin colour
           on the scale is more than half a match from one — the published tones are unevenly
           spaced, and real skin falls in the gaps. Each point is audited three times: for oily,
           balanced and dry skin, each prescribed by the same function that prescribes a

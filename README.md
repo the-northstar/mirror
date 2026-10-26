@@ -5,7 +5,7 @@
 Mirror reads one selfie and shops for you. Every product it shows names the
 measurement that chose it, and you can see most of them on your own face.
 
-**Live: [mirror.pykero.com](https://mirror.pykero.com)** — no sign-in needed to
+**Live: [mirror-app.pykero.com](https://mirror-app.pykero.com)** — no sign-in needed to
 scan and shop. Android APK: [`mirror.apk`](mirror.apk).
 
 ## New since the last submission
@@ -18,7 +18,7 @@ submission period, and the commit history dates it.
 Mirror did before asks what suits *one face*. A brand needs the inverse —
 across every face, *who does this range fail?* — and can never get it from its
 own data, because a shopper with no shade leaves without buying, so she shows
-up in neither the sales nor the returns. Open **[`/audit`](https://mirror.pykero.com/audit)**
+up in neither the sales nor the returns. Open **[`/audit`](https://mirror-app.pykero.com/audit)**
 (no sign-in):
 
 - **A whole catalogue against the whole skin-tone scale.** The ten tones of the
@@ -42,9 +42,41 @@ up in neither the sales nor the returns. Open **[`/audit`](https://mirror.pykero
   closest product the range actually stocks, worn in its own finish, next to
   what that face was prescribed. A ΔE convinces an analyst; a face convinces a
   buyer.
+- **What to make next, ranked.** A list of gaps says where a range fails; a
+  buyer's real question is *"I can add three products — which?"* The audit
+  answers it: the colour and finish that serves the most faces still unserved,
+  then the next given that one, each naming the brand's own line to extend
+  when it has one in that finish. A face that gets its shade and finish counts
+  one; a face with no shade at all that gets one counts half. On the sample
+  range, three picks take shade coverage from 72% to 100%. A buy list a
+  merchandiser can forward downloads as CSV.
+- **A range map** above the strip: every shade the range stocks, stacked by
+  finish at its point on the scale, so the reason for a gap is visible — the
+  shelf bunched at the light end, nearly all of it matte.
 - **Merchants can now state a finish** (matte, natural, dewy) in the form, the
   spreadsheet, feeds and SDK pushes, and a signed-in store gets the audit of its
   own catalogue under a new **Coverage** tab.
+
+**Why it matters**, from sources we checked:
+
+- **41%** of online beauty shoppers have returned an item because it was the
+  wrong shade, and over 60% decided not to buy because they could not tell
+  which shade to choose — Google's survey of 2,000 US shoppers
+  ([Google, 2022](https://blog.google/products/shopping/shopping-inspiration-insights/)).
+- **56%** of women at Monk tones 6–10 find complexion products hard to match
+  (41% overall), and 61% of those with darker skin have abandoned a brand over
+  its shade range — a 4,300-woman survey that used the Monk scale itself
+  ([The Benchmarking Company, 2026](https://benchmarkingcompany.com/news/shade-mismatch-inclusivity-2026-infographic-series-1/)).
+- **4%** of 6,816 US foundation shades (328 products, 107 brands at Sephora and
+  Ulta) sit nearest the three deepest Monk tones; 65% of those products offer
+  nothing at Monk 8 or deeper; and two-thirds of all the shades never name
+  their finish in the product name. That is our own analysis of
+  [The Pudding's 2021 dataset](https://pudding.cool/2021/03/foundation-names/),
+  using the audit's colour maths — and since retail swatch colours run light,
+  a rough proxy that likely flatters the deep end.
+
+We found no published measurement of finish mismatch at all. That half of the
+problem is new ground, which is the point.
 
 It is deterministic — no model in the loop — and honest about its limits,
 which are spelled out on the page. One we found the hard way: pointed at the

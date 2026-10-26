@@ -27,8 +27,10 @@ export const FINISHES: Finish[] = ['matte', 'natural', 'dewy']
 /**
  * The Monk Skin Tone Scale: ten tones, lightest to deepest.
  *
- * Developed by Dr. Ellis Monk and published by Google under CC BY 4.0 for
- * exactly this job — checking whether a system works across skin tones. Chosen
+ * Developed by Dr. Ellis Monk (2019) and released openly by Google in 2022
+ * under CC BY 4.0 for exactly this job — checking whether a system works
+ * across skin tones. The hexes are the scale's published reference colours,
+ * checked against skintone.google. Chosen
  * over Fitzpatrick because Fitzpatrick was built to predict sunburn and
  * compresses deep skin into two of its six types, which is where ranges fail.
  */
