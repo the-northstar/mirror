@@ -5,6 +5,7 @@ import { Landing } from './landing/Landing'
 import { normalizeImage } from './lib/image'
 import { fileToDataUrl, loadScans, removeScan, saveScan, type PastScan } from './lib/history'
 import Store from './Store'
+import Audit from './Audit'
 import './App.css'
 
 /* -- Types mirroring the API ------------------------------------------- */
@@ -71,7 +72,7 @@ interface Shop {
   makeup: { effects: unknown[]; explain: string }
 }
 
-type Screen = 'land' | 'scanning' | 'diagnosis' | 'shop' | 'cart' | 'store'
+type Screen = 'land' | 'scanning' | 'diagnosis' | 'shop' | 'cart' | 'store' | 'audit'
 
 /** What the bag remembers about a line, so it survives a reload on its own. */
 interface CartLine {
@@ -138,6 +139,7 @@ const PATHS: Record<Screen, string> = {
   shop: '/shop',
   cart: '/bag',
   store: '/store',
+  audit: '/audit',
 }
 const SCREEN_BY_PATH = Object.fromEntries(
   Object.entries(PATHS).map(([k, v]) => [v, k as Screen]),
@@ -347,6 +349,15 @@ export default function App() {
         )}
 
         <button
+          className={screen === 'audit' ? 'navlink on' : 'navlink'}
+          aria-current={screen === 'audit' ? 'page' : undefined}
+          onClick={() => setScreen('audit')}
+        >
+          <span className="nav-long">For brands</span>
+          <span className="nav-short">Brands</span>
+        </button>
+
+        <button
           className={screen === 'store' ? 'navlink on' : 'navlink'}
           aria-current={screen === 'store' ? 'page' : undefined}
           onClick={() => setScreen('store')}
@@ -405,6 +416,7 @@ export default function App() {
             onCamera={() => setShooting(true)}
             onFile={scan}
             onStore={() => setScreen('store')}
+            onAudit={() => setScreen('audit')}
             scans={scans}
             onReopen={reopen}
             onForget={(id) => setScans(removeScan(id))}
@@ -452,6 +464,15 @@ export default function App() {
         />
       )}
       {screen === 'store' && <Store />}
+      {screen === 'audit' && (
+        <Audit
+          scan={
+            reading
+              ? { fileId: reading.fileId, skinHex: reading.color.skin_color, concerns: reading.concerns }
+              : null
+          }
+        />
+      )}
       {screen === 'cart' && (
         <Cart cart={cart} lines={cartLines} shop={shop} onChange={setCart} />
       )}

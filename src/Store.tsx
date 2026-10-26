@@ -29,6 +29,7 @@ import {
 } from './lib/products'
 import type { Order } from './lib/catalogue'
 import { CLERK_KEY } from './lib/clerk'
+import Audit from './Audit'
 
 type Row = {
   name: string
@@ -89,7 +90,7 @@ function Owner() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imported, setImported] = useState<string | null>(null)
-  const [tab, setTab] = useState<'products' | 'orders' | 'finance' | 'sdk'>('products')
+  const [tab, setTab] = useState<'products' | 'coverage' | 'orders' | 'finance' | 'sdk'>('products')
   const [orders, setOrders] = useState<Order[]>([])
   const [finance, setFinance] = useState<Finance | null>(null)
   const [keys, setKeys] = useState<{ storeId: string; apiKey: string } | null>(null)
@@ -227,6 +228,7 @@ function Owner() {
         {(
           [
             ['products', `Products (${mine.length})`],
+            ['coverage', 'Coverage'],
             ['orders', `Orders (${orders.length})`],
             ['finance', 'Finance'],
             ['sdk', 'Add to my site'],
@@ -681,6 +683,14 @@ function Owner() {
         )}
         </section>
       )}
+
+      {tab === 'coverage' &&
+        (keys ? (
+          // Keyed by store so switching accounts never shows the last report.
+          <Audit key={keys.storeId} storeId={keys.storeId} />
+        ) : (
+          <p className="tiny">Loading your store…</p>
+        ))}
 
       {tab === 'sdk' && <SdkPanel keys={keys} count={mine.length} />}
 

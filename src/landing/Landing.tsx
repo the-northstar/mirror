@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { MONK } from '../lib/coverage'
 import portrait from './assets/portrait.jpg'
 import { Counter } from './components/Counter'
 import { FormulaSplit } from './components/FormulaSplit'
@@ -122,6 +123,7 @@ export function Landing({
   onCamera,
   onFile,
   onStore,
+  onAudit,
   scans,
   onReopen,
   onForget,
@@ -129,6 +131,7 @@ export function Landing({
   onCamera: () => void
   onFile: (f: File) => void
   onStore: () => void
+  onAudit: () => void
   scans: PastScan[]
   onReopen: (s: PastScan) => void
   onForget: (id: string) => void
@@ -375,6 +378,39 @@ export function Landing({
           </p>
         </div>
       </Spotlight>
+
+      {/* 10b — For brands. The inverse of everything above: not what suits one
+          face, but which faces a whole range fails. Drawn on the Monk scale
+          itself so the claim is about skin, not about a chart. */}
+      <section className="mx-auto max-w-[1400px] px-6 py-28 sm:px-10 lg:py-36">
+        <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-[var(--copper)]">
+          For brands
+        </p>
+        <h2 className="mt-5 max-w-3xl font-serif text-4xl leading-[1.05] tracking-[-0.02em] sm:text-5xl">
+          &ldquo;40 shades&rdquo; is a count. Coverage is a measurement.
+        </h2>
+        <p className="mt-7 max-w-2xl text-[17px] leading-relaxed text-[var(--pencil)]">
+          Run a whole catalogue against the Monk Skin Tone Scale and three skin types. The audit
+          names, in ΔE, which faces leave with no shade at all — and which find the shade but not
+          the formula their skin is prescribed, the half no shade count ever shows. Then it puts a
+          real face in the range and renders the gap on it.
+        </p>
+        <div className="mt-12 flex max-w-2xl gap-1.5" aria-hidden>
+          {MONK.map((m) => (
+            <span
+              key={m.tone}
+              className="h-14 flex-1 rounded-md ring-1 ring-inset ring-[color-mix(in_oklab,var(--ink)_12%,transparent)]"
+              style={{ background: m.hex }}
+            />
+          ))}
+        </div>
+        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--pencil)]">
+          Monk Skin Tone Scale · 1 to 10
+        </p>
+        <div className="mt-12">
+          <MagneticButton onClick={onAudit}>See who a range misses</MagneticButton>
+        </div>
+      </section>
 
       {/* 11 — For stores. Sits after the shopper's case is made: a retailer only
           cares that the match is measured once they have seen it work. */}
