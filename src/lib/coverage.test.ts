@@ -9,6 +9,7 @@ import {
   MATCH_DE,
   MONK,
   nearestRung,
+  nextAdditions,
   PANEL,
   placeDemand,
   placeFace,
@@ -219,5 +220,65 @@ describe('the scale and real skin', () => {
     const real = nearestRung('#b09179')
     expect(Math.floor(real.at)).toBe(5)
     expect(real.dE).toBeGreaterThan(MATCH_DE)
+  })
+})
+
+describe('what to stock next', () => {
+  test('a range that serves everyone needs nothing', () => {
+    expect(nextAdditions(fullRange(['matte', 'natural', 'dewy']))).toEqual([])
+  })
+
+  test('the first pick fills a hole before it refines a shelf that works', () => {
+    // Light tones have shades (only matte); the deep end has nothing at all.
+    const light = LADDER.filter((r) => r.at <= 5).map((r) => mk(r.hex, { finish: 'matte' }))
+    const [first] = nextAdditions(light)
+    expect(first.at).toBeGreaterThan(5)
+    expect(first.shadeOnly).toBeGreaterThan(0)
+  })
+
+  test('each pick is scored on what is still open, never re-counting', () => {
+    const picks = nextAdditions(fullRange(['matte']), [], 5)
+    const dry = picks.map((p) => p.after.dry)
+    // Coverage only ever rises, and no two picks claim the same faces.
+    for (let i = 1; i < dry.length; i++) expect(dry[i]).toBeGreaterThanOrEqual(dry[i - 1])
+    const total = picks.reduce((n, p) => n + p.seats, 0)
+    const after = picks.at(-1)!.after
+    expect(Math.round((after.balanced + after.dry) * LADDER.length)).toBe(total)
+  })
+
+  test('a tie goes to the worst-served skin type', () => {
+    // Oily skin is fully served; balanced and dry are not served at all.
+    const [first] = nextAdditions(fullRange(['matte', 'dewy']))
+    expect(first.finish).toBe('natural')
+  })
+
+  test("it extends the brand's own line in that finish when there is one", () => {
+    const rows = [
+      ...LADDER.filter((r) => r.at <= 4).map((r) => mk(r.hex, { name: 'Glow Tint', finish: 'dewy' })),
+      ...LADDER.map((r) => mk(r.hex, { name: 'Matte Base', finish: 'matte' })),
+      ...LADDER.map((r) => mk(r.hex, { name: 'Satin Base', finish: 'natural' })),
+    ]
+    const [first] = nextAdditions(rows)
+    expect(first.finish).toBe('dewy')
+    expect(first.extend).toBe('Glow Tint')
+  })
+
+  test('real shoppers it would have served are counted with it', () => {
+    const light = LADDER.filter((r) => r.at <= 5).map((r) => mk(r.hex, { finish: 'matte' }))
+    const deep = LADDER.find((r) => r.at === 8)!.hex
+    const picks = nextAdditions(light, [{ skinHex: deep, finish: 'dewy' }, { skinHex: deep, finish: 'dewy' }], 3)
+    const hit = picks.find((p) => p.shoppers > 0)!
+    expect(hit.finish).toBe('dewy')
+    expect(hit.shoppers).toBe(2)
+  })
+})
+
+describe('where the range sits', () => {
+  test('every base is counted once, at its nearest rung, by finish', () => {
+    const rows = [mk('#a07e56', { finish: 'matte' }), mk('#a07e56'), mk('#292420', { finish: 'dewy' })]
+    const range = audit(rows).range
+    expect(range.find((r) => r.at === 6)).toMatchObject({ matte: 1, unstated: 1, natural: 0, dewy: 0 })
+    expect(range.find((r) => r.at === 10)).toMatchObject({ dewy: 1 })
+    expect(range.reduce((n, r) => n + r.matte + r.natural + r.dewy + r.unstated, 0)).toBe(3)
   })
 })

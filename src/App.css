@@ -2231,3 +2231,150 @@
     display: inline;
   }
 }
+
+/* What to make next ------------------------------------------------------- */
+.additions {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.addition {
+  display: grid;
+  grid-template-columns: 28px 56px 1fr;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+
+.addition-rank {
+  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.addition-swatch {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1px solid rgb(22 26 23 / 0.12);
+}
+
+.addition-body {
+  display: grid;
+  gap: 4px;
+}
+
+.addition-body h3 {
+  font-size: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.addition-shift {
+  font-variant-numeric: tabular-nums;
+}
+
+.addition-total {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+/* Finish colours, shared by the chips, the range bars and the legend. Matte
+   is the densest, dewy the brightest, unstated hatched because it is an
+   absence of information rather than a finish. */
+.f-matte {
+  --f: #3d4540;
+}
+
+.f-natural {
+  --f: #8c9a8f;
+}
+
+.f-dewy {
+  --f: #d4a95a;
+}
+
+.f-unstated {
+  --f: #c9c6bd;
+}
+
+.finish-chip {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--f);
+}
+
+.f-dewy.finish-chip,
+.f-unstated.finish-chip {
+  color: var(--ink);
+}
+
+.range-bars {
+  height: 48px;
+  align-items: flex-end;
+}
+
+.range-bar {
+  flex: 1 1 0;
+  min-width: 5px;
+  height: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+  gap: 1px;
+  border-bottom: 1px solid var(--line);
+}
+
+.range-bar .seg {
+  display: block;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--f);
+}
+
+.range-bar .seg.f-unstated,
+.legend-seg.f-unstated {
+  background: repeating-linear-gradient(135deg, var(--f) 0 3px, transparent 3px 6px);
+}
+
+.legend-seg {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--f);
+}
+
+@media (max-width: 640px) {
+  .addition {
+    grid-template-columns: 22px 40px 1fr;
+    gap: 10px;
+  }
+
+  .addition-swatch {
+    width: 40px;
+    height: 40px;
+  }
+
+  .range-bar {
+    min-width: 3px;
+  }
+}

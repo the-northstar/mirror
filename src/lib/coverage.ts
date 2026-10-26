@@ -343,7 +343,24 @@ export interface Audit {
   seats: number
   cells: Cell[]
   tones: ToneRow[]
+  /** Where the range's bases actually sit: per rung, how many, by finish. */
+  range: RangeRung[]
   findings: Finding[]
+}
+
+export type RangeRung = { at: number; hex: string } & Record<Finish | 'unstated', number>
+
+/** Each base, counted at the rung it sits nearest. */
+function rangeOf(shades: Shade[]): RangeRung[] {
+  const rows: RangeRung[] = LADDER.map((r) => ({ at: r.at, hex: r.hex, matte: 0, natural: 0, dewy: 0, unstated: 0 }))
+  for (const s of shades) {
+    let best = 0
+    for (let i = 1; i < LADDER.length; i++) {
+      if (deltaE(s.lab, LADDER[i].lab) < deltaE(s.lab, LADDER[best].lab)) best = i
+    }
+    rows[best][s.ref.finish ?? 'unstated'] += 1
+  }
+  return rows
 }
 
 /**
@@ -420,8 +437,147 @@ export function audit(products: Product[]): Audit {
     seats: cells.length,
     cells,
     tones,
+    range: rangeOf(shades),
     findings: findingsFor(cells, rungs, tones, finishes, shades.length, blushes.length, lipsticks.length, shadeCoverage),
   }
+}
+
+/* -- What to stock next ------------------------------------------------------ */
+
+export interface Addition {
+  rank: number
+  /** The shade to add: a point on the scale. */
+  hex: string
+  at: number
+  finish: Finish
+  /** The range's own line in this finish to extend, or null for a new formula. */
+  extend: string | null
+  /** Panel points it gives their shade AND finish, after the additions above it. */
+  seats: number
+  /** Panel points that had no shade at all and now get one, in another finish. */
+  shadeOnly: number
+  /** Real scanned shoppers, unserved today, it would have given their match. */
+  shoppers: number
+  /** Where on the scale it helps, in words. */
+  where: string
+  /** Skin types it gives a full match. */
+  skins: SkinType[]
+  /** Formula coverage per skin type once this and those above it are stocked. */
+  after: Record<SkinType, number>
+  /** Shade coverage (any finish) once this and those above it are stocked. */
+  afterShade: number
+}
+
+/**
+ * The next products to make, ranked by how many faces each one serves.
+ *
+ * A list of gaps tells a buyer where the range fails; this answers the
+ * question they actually have — "I can add three products; which?" Greedy, so
+ * each pick is scored on what is still unserved after the ones above it: the
+ * second recommendation never re-counts faces the first already fixed.
+ *
+ * Candidates are every point on the scale in every finish. A face that gets
+ * its shade and its prescribed finish counts 1. A face that had NO shade within
+ * MATCH_DE and now gets one, in another finish, counts 1/2: better than
+ * nothing, not the answer. Without that half, every candidate serves about the
+ * same handful of points and ties went to the lightest — recommending a second
+ * light formula before any shade at all for skin the range ignores entirely.
+ * Real scanned shoppers count the same way as panel points.
+ */
+/** Which skin type each finish is prescribed for, read off the panel itself. */
+const SKIN_FOR = Object.fromEntries(PANEL.map((s) => [s.need, s.skin])) as Record<Finish, SkinType>
+
+export function nextAdditions(products: Product[], demand: Demand[] = [], count = 3): Addition[] {
+  const shades = toShades(products)
+  const cells = PANEL.map((seat) => ({ ...seat, ...place(shades, seat.hex, seat.need) }))
+  const cellLab = cells.map((c) => LADDER[INDEX.get(c.at)!].lab)
+  const open = new Set(cells.flatMap((c, i) => (c.verdict === 'served' ? [] : [i])))
+  const shadeless = new Set(cells.flatMap((c, i) => (c.verdict === 'no-shade' ? [i] : [])))
+
+  const demandLab = demand.map((d) => hexToLab(d.skinHex))
+  const placed = demand.map((d) => place(shades, d.skinHex, d.finish).verdict)
+  const demandOpen = new Set(placed.flatMap((v, j) => (v === 'served' ? [] : [j])))
+  const demandShadeless = new Set(placed.flatMap((v, j) => (v === 'no-shade' ? [j] : [])))
+
+  const servedBy: Record<SkinType, number> = { oily: 0, balanced: 0, dry: 0 }
+  for (const c of cells) if (c.verdict === 'served') servedBy[c.skin] += 1
+  const perSkin = LADDER.length
+  const rungShade = new Set(cells.flatMap((c) => (c.verdict === 'no-shade' ? [] : [c.at])))
+
+  const out: Addition[] = []
+  for (let rank = 1; rank <= count; rank++) {
+    type Pick = { rung: Rung; finish: Finish; full: number[]; half: number[]; shoppers: number[]; shopHalf: number[]; score: number }
+    let best: Pick | null = null
+    for (const rung of LADDER) {
+      for (const finish of FINISHES) {
+        const near = (lab: Lab) => deltaE(rung.lab, lab) < MATCH_DE
+        const full = [...open].filter((i) => cells[i].need === finish && near(cellLab[i]))
+        const half = [...shadeless].filter((i) => cells[i].need !== finish && near(cellLab[i]))
+        const shoppers = [...demandOpen].filter((j) => demand[j].finish === finish && near(demandLab[j]))
+        const shopHalf = [...demandShadeless].filter((j) => demand[j].finish !== finish && near(demandLab[j]))
+        const score = full.length + shoppers.length + (half.length + shopHalf.length) / 2
+        // A tie goes to the finish whose skin type is worst served right now,
+        // so equal picks spread across formulas instead of stacking one.
+        const better =
+          !best ||
+          score > best.score ||
+          (score === best.score && servedBy[SKIN_FOR[finish]] < servedBy[SKIN_FOR[best.finish]])
+        if (score > 0 && better) best = { rung, finish, full, half, shoppers, shopHalf, score }
+      }
+    }
+    if (!best) break
+
+    for (const i of best.full) {
+      open.delete(i)
+      shadeless.delete(i)
+      servedBy[cells[i].skin] += 1
+      rungShade.add(cells[i].at)
+    }
+    for (const i of best.half) {
+      shadeless.delete(i)
+      rungShade.add(cells[i].at)
+    }
+    for (const j of best.shoppers) {
+      demandOpen.delete(j)
+      demandShadeless.delete(j)
+    }
+    for (const j of best.shopHalf) demandShadeless.delete(j)
+
+    const helped = [...best.full, ...best.half].map((i) => cells[i]).sort((a, b) => a.at - b.at)
+    out.push({
+      rank,
+      hex: best.rung.hex,
+      at: best.rung.at,
+      finish: best.finish,
+      extend: lineToExtend(shades, best.rung.lab, best.finish),
+      seats: best.full.length,
+      shadeOnly: best.half.length,
+      shoppers: best.shoppers.length,
+      where: spanWord(helped.length ? helped : [best.rung]),
+      skins: [...new Set(best.full.map((i) => cells[i].skin))],
+      after: {
+        oily: round2(servedBy.oily / perSkin),
+        balanced: round2(servedBy.balanced / perSkin),
+        dry: round2(servedBy.dry / perSkin),
+      },
+      afterShade: round2(rungShade.size / perSkin),
+    })
+  }
+  return out
+}
+
+/**
+ * The range's own line in this finish whose shades come nearest — extending a
+ * formula the brand already makes is a cheaper ask than launching one.
+ */
+function lineToExtend(shades: Shade[], target: Lab, finish: Finish): string | null {
+  let best: { name: string; dE: number } | null = null
+  for (const s of shades) {
+    if (s.ref.finish !== finish) continue
+    const dE = deltaE(target, s.lab)
+    if (!best || dE < best.dE) best = { name: s.ref.name, dE }
+  }
+  return best?.name ?? null
 }
 
 /* -- Findings ----------------------------------------------------------------- */

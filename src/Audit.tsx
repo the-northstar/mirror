@@ -12,8 +12,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { normalizeImage } from './lib/image'
 import type {
+  Addition,
   Audit as Report,
   Cell,
+  RangeRung,
   DemandReport,
   Finding,
   Placement,
@@ -49,6 +51,7 @@ interface Result {
   note: string
   intake: { rejected: Array<{ name: string; why: string }>; skipped: number } | null
   audit: Report
+  additions: Addition[]
   demand: DemandReport | null
   face: FaceResult | null
 }
@@ -178,7 +181,8 @@ export default function Audit({ scan, storeId }: { scan?: ScanForAudit | null; s
       {result && audit && (
         <div className={busy ? 'stack-lg audit-body is-busy' : 'stack-lg audit-body'} aria-busy={busy}>
           <Headline audit={audit} demand={result.demand} />
-          <Strip cells={audit.cells} />
+          <NextShades additions={result.additions} audit={audit} label={result.label} />
+          <Strip cells={audit.cells} range={audit.range} />
           <Findings findings={audit.findings} />
           {result.demand && <Demand demand={result.demand} />}
           <FaceTest
@@ -252,7 +256,10 @@ function Headline({ audit, demand }: { audit: Report; demand: DemandReport | nul
       <div className="figure">
         <strong>{c.base}</strong>
         <span className="tiny">
-          bases audited{c.setAside ? `, ${c.setAside} powders and concealers set aside` : ''}
+          bases audited
+          {c.setAside
+            ? `, ${c.setAside} ${c.setAside === 1 ? 'powder or concealer' : 'powders and concealers'} set aside`
+            : ''}
         </span>
       </div>
       {demand && demand.count > 0 ? (
@@ -294,13 +301,159 @@ function cellTitle(c: Cell): string {
 }
 
 /**
+ * The answer a buyer actually needs: not where the range fails, but which
+ * products to make next, in order. Each card is scored on what is still open
+ * after the cards above it, so the three together are a plan, not three
+ * restatements of the same gap.
+ */
+function NextShades({ additions, audit, label }: { additions: Addition[]; audit: Report; label: string }) {
+  if (!additions.length) {
+    if (audit.served === audit.seats) return null
+    return (
+      <section className="card stack">
+        <span className="kicker">What to make next</span>
+        <p className="tiny">
+          No single new shade would fix what is left: the remaining gaps are listings that do
+          not state a finish. Declare it, and the audit can count them.
+        </p>
+      </section>
+    )
+  }
+  const last = additions.at(-1)!
+  const f = audit.formulaCoverage
+  return (
+    <section className="card stack next-shades">
+      <div>
+        <span className="kicker">What to make next</span>
+        <h2 className="strip-title">
+          The next {additions.length === 1 ? 'shade' : `${additions.length} shades`} to add
+        </h2>
+        <p className="tiny">
+          Ranked by how many faces each one serves, after the ones above it. A face that gets
+          its shade and its prescribed finish counts one; a face with no shade at all that gets
+          one in another finish counts half.
+        </p>
+      </div>
+      <ol className="additions">
+        {additions.map((a) => (
+          <li key={a.rank} className="addition">
+            <span className="addition-rank">{a.rank}</span>
+            <span className="addition-swatch" style={{ background: a.hex }} aria-hidden />
+            <div className="addition-body">
+              <h3>
+                {a.extend ? `Extend ${a.extend}` : `A new ${a.finish} base`}{' '}
+                <span className={`finish-chip f-${a.finish}`}>{a.finish}</span>
+              </h3>
+              <p className="tiny">{additionSentence(a)}</p>
+              <p className="addition-shift tiny">
+                <strong>{a.hex}</strong> · Monk {Number.isInteger(a.at) ? a.at : a.at.toFixed(1)} ·
+                shade coverage → {pct(a.afterShade)}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <p className="addition-total">
+        Together: shade coverage{' '}
+        <strong>
+          {pct(audit.shadeCoverage)} → {pct(last.afterShade)}
+        </strong>
+        ; right finish for oily · balanced · dry{' '}
+        <strong>
+          {pct(f.oily)} · {pct(f.balanced)} · {pct(f.dry)} → {pct(last.after.oily)} ·{' '}
+          {pct(last.after.balanced)} · {pct(last.after.dry)}
+        </strong>
+        .
+      </p>
+      <div className="actions">
+        <a className="btn btn-sm btn-quiet" href={buyListHref(additions, audit)} download={`buy-list-${slug(label)}.csv`}>
+          Download the buy list (CSV)
+        </a>
+      </div>
+    </section>
+  )
+}
+
+function additionSentence(a: Addition): string {
+  const parts: string[] = []
+  if (a.seats) parts.push(`Gives ${a.skins.join(' and ')} skin its shade and finish ${a.where}`)
+  if (a.shadeOnly) {
+    parts.push(
+      `${a.seats ? 'and gives' : 'Gives'} ${a.shadeOnly} more point${a.shadeOnly === 1 ? '' : 's'} on the panel a shade where there was none`,
+    )
+  }
+  const real = a.shoppers
+    ? ` It would have matched ${a.shoppers} real shopper${a.shoppers === 1 ? '' : 's'} who scanned and found nothing.`
+    : ''
+  return `${parts.join(', ')}.${real}`
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+/** The plan as a sheet a buyer can forward, with the findings under it. */
+function buyListHref(additions: Addition[], audit: Report): string {
+  const esc = (v: string | number) => {
+    const s = String(v)
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const rows: Array<Array<string | number>> = [
+    ['rank', 'product', 'finish', 'hex', 'monk', 'where', 'full_matches', 'shade_only', 'real_shoppers', 'shade_coverage_after', 'oily_after', 'balanced_after', 'dry_after'],
+    ...additions.map((a) => [
+      a.rank,
+      a.extend ? `Extend ${a.extend}` : `New ${a.finish} base`,
+      a.finish,
+      a.hex,
+      a.at,
+      a.where,
+      a.seats,
+      a.shadeOnly,
+      a.shoppers,
+      pct(a.afterShade),
+      pct(a.after.oily),
+      pct(a.after.balanced),
+      pct(a.after.dry),
+    ]),
+    [],
+    ['finding', 'title', 'action'],
+    ...audit.findings.map((x) => [x.kind, x.title, x.action ?? '']),
+  ]
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(rows.map((r) => r.map(esc).join(',')).join('\n') + '\n')}`
+}
+
+const FINISH_ORDER = ['matte', 'natural', 'dewy', 'unstated'] as const
+const FINISH_WORD: Record<(typeof FINISH_ORDER)[number], string> = {
+  matte: 'Matte shade',
+  natural: 'Natural shade',
+  dewy: 'Dewy shade',
+  unstated: 'Finish not stated',
+}
+
+const total = (r: RangeRung) => r.matte + r.natural + r.dewy + r.unstated
+
+function rungTitle(r: RangeRung): string {
+  const n = total(r)
+  const at = Number.isInteger(r.at) ? r.at : r.at.toFixed(2)
+  return n
+    ? `Monk ${at}: ${n} shade${n === 1 ? '' : 's'} — ${r.matte} matte, ${r.natural} natural, ${r.dewy} dewy, ${r.unstated} unstated`
+    : `Monk ${at}: no shades`
+}
+
+function rangeLabel(range: RangeRung[]): string {
+  const held = range.filter((r) => total(r) > 0)
+  return held.length
+    ? `Where the range's shades sit: ${held.map((r) => `${total(r)} near Monk ${r.at}`).join(', ')}`
+    : 'The range has no base shades'
+}
+
+/**
  * The scale, drawn as three rows of the skin it stands for.
  *
  * Each cell is painted in its own skin colour, so a gap reads as a stretch of
  * faces with nothing on the shelf rather than as an abstract red block.
  */
-function Strip({ cells }: { cells: Cell[] }) {
+function Strip({ cells, range }: { cells: Cell[]; range: RangeRung[] }) {
   const rungs = [...new Set(cells.map((c) => c.at))].sort((a, b) => a - b)
+  const tallest = Math.max(1, ...range.map(total))
   const anchors = rungs
     .map((at, i) => ({ at, i }))
     .filter((r) => Number.isInteger(r.at))
@@ -309,6 +462,24 @@ function Strip({ cells }: { cells: Cell[] }) {
       <div>
         <span className="kicker">Monk Skin Tone Scale, 1 to 10</span>
         <h2 className="strip-title">Where the range reaches</h2>
+      </div>
+      <div className="strip-row">
+        <span className="strip-label tiny">Your shades, by finish</span>
+        <div
+          className="strip-cells range-bars"
+          role="img"
+          aria-label={rangeLabel(range)}
+        >
+          {range.map((r) => (
+            <span key={r.at} className="range-bar" title={rungTitle(r)}>
+              {FINISH_ORDER.map((f) =>
+                r[f] ? (
+                  <i key={f} className={`seg f-${f}`} style={{ height: `${(r[f] / tallest) * 100}%` }} />
+                ) : null,
+              )}
+            </span>
+          ))}
+        </div>
       </div>
       {SKIN_ROWS.map(({ skin, label }) => {
         const row = cells.filter((c) => c.skin === skin).sort((a, b) => a.at - b.at)
@@ -344,6 +515,12 @@ function Strip({ cells }: { cells: Cell[] }) {
         </div>
       </div>
       <ul className="strip-legend tiny">
+        {FINISH_ORDER.map((f) => (
+          <li key={f}>
+            <span className={`legend-seg f-${f}`} aria-hidden />
+            {FINISH_WORD[f]}
+          </li>
+        ))}
         {(Object.keys(VERDICT_WORD) as Verdict[]).map((v) => (
           <li key={v}>
             <span className={`strip-cell v-${v}`} style={{ ['--c' as string]: '#a07e56' }} aria-hidden />

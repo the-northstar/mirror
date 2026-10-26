@@ -54,7 +54,7 @@ import {
   type Product,
 } from './src/lib/catalogue'
 import { csvToRows, detectKind, fetchFeed, rowsToCatalogue, type FeedKind } from './src/lib/feed'
-import { audit, nearestRung, placeDemand, placeFace } from './src/lib/coverage'
+import { audit, nearestRung, nextAdditions, placeDemand, placeFace } from './src/lib/coverage'
 import { demandFor, MIRROR, recordDemand } from './src/lib/demand'
 import {
   rankBlush,
@@ -835,7 +835,10 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
     }
 
     const report = audit(products)
-    const demand = demandKey ? placeDemand(products, demandFor(demandKey)) : null
+    const scans = demandKey ? demandFor(demandKey) : []
+    const demand = demandKey ? placeDemand(products, scans) : null
+    // What to make next, counting the real shoppers this range already lost.
+    const additions = nextAdditions(products, scans, 3)
 
     let face = null
     const f = body.face
@@ -868,7 +871,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       }
     }
 
-    return json({ label, note, intake, audit: report, demand, face })
+    return json({ label, note, intake, audit: report, additions, demand, face })
   },
 
   /** Per-feed row counts and which shelves fell back to the snapshot. */
