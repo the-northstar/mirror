@@ -1,12 +1,63 @@
 # Mirror
 
-**YouCam API Skin AI & Apparel VTO Hackathon — combined track.**
+**YouCam API Skin AI & eCommerce VTO Hackathon.**
 
 Mirror reads one selfie and shops for you. Every product it shows names the
 measurement that chose it, and you can see most of them on your own face.
 
 **Live: [mirror.pykero.com](https://mirror.pykero.com)** — no sign-in needed to
 scan and shop. Android APK: [`mirror.apk`](mirror.apk).
+
+## New since the last submission
+
+Mirror was first entered in the YouCam API Skin AI & Apparel VTO Hackathon in
+August 2026. Everything in this section was built during this hackathon's
+submission period, and the commit history dates it.
+
+**The coverage audit: the same engine, turned around for brands.** Everything
+Mirror did before asks what suits *one face*. A brand needs the inverse —
+across every face, *who does this range fail?* — and can never get it from its
+own data, because a shopper with no shade leaves without buying, so she shows
+up in neither the sales nor the returns. Open **[`/audit`](https://mirror.pykero.com/audit)**
+(no sign-in):
+
+- **A whole catalogue against the whole skin-tone scale.** The ten tones of the
+  [Monk Skin Tone Scale](https://skintone.google/) with points laid between
+  them, each audited for oily, balanced and dry skin — prescribed by the same
+  `formulaFor()` that prescribes a shopper, so the audit can never disagree
+  with what the app tells someone with that skin.
+- **Shade *and* formula.** Each point is *served*, *right shade but wrong
+  finish*, *shade matches but finish unstated*, or *no shade within 5 ΔE*. The
+  second one is the half of the match no shade count ("40 shades!") ever shows.
+- **Findings a merchandiser can act on**, gaps first, each naming the stretch
+  of the scale, the ΔE behind it, and the hex to stock. Blush and lipstick are
+  checked with the shopper side's own bands (a blush that sits on deep skin
+  rather than in it; nudes that read chalky).
+- **Real demand, from YouCam scans.** Every scan now leaves exactly two things
+  for the store it happened in: the measured skin colour and the prescribed
+  finish — no photo, no identity. The audit places those real shoppers against
+  the range: *"7 of 40 shoppers who scanned found no shade."*
+- **Put a face in the range.** Scan a face (YouCam skin-tone + skin analysis),
+  see where it lands, then render two looks on it with YouCam makeup-vto: the
+  closest product the range actually stocks, worn in its own finish, next to
+  what that face was prescribed. A ΔE convinces an analyst; a face convinces a
+  buyer.
+- **Merchants can now state a finish** (matte, natural, dewy) in the form, the
+  spreadsheet, feeds and SDK pushes, and a signed-in store gets the audit of its
+  own catalogue under a new **Coverage** tab.
+
+It is deterministic — no model in the loop — and honest about its limits,
+which are spelled out on the page. One we found the hard way: pointed at the
+public makeup-api feed, it reported famously inclusive brands as having no
+deep shades, because that feed's scraped swatch colours run light. So the audit
+is offered on a store's own data, a sample range and Mirror's shelves — never
+as a verdict on a named brand from someone else's data. And real skin does not
+sit exactly on Monk's line (measured mid-depth skin is less yellow than the
+published tones), which is why real scans are placed exactly as measured rather
+than snapped to a tone.
+
+The sample range on the page, "Demo Brand", is fictional, labelled so, and
+audited through the same upload path a merchant's spreadsheet takes.
 
 ## Trying it in a minute
 
@@ -26,6 +77,10 @@ take **one close-up, evenly lit photo of one face**, then:
 4. **"Try it on"** renders it on your own photo, carrying *your* prescribed
    intensities rather than a preset.
 
+5. **For brands** (`/audit`, no sign-in) runs the coverage audit above on a
+   sample range, a CSV of your own, or Mirror's shelves — and puts your scan
+   in the range.
+
 The interesting comparison is two different faces: the same matched shade comes
 out matte on oily skin and dewy on dry, and the shelves reorder around the
 reading rather than around a bestseller list.
@@ -41,7 +96,9 @@ rather than blanking.
 **Screenshots:** [landing](docs/screenshots/1-landing.jpg) ·
 [diagnosis](docs/screenshots/2-diagnosis.jpg) ·
 [aisles](docs/screenshots/3-chooser.jpg) ·
-[a ranked shelf](docs/screenshots/4-foundation.jpg)
+[a ranked shelf](docs/screenshots/4-foundation.jpg) ·
+[the coverage audit](docs/screenshots/5-audit.jpg) ·
+[the gap, rendered on a face](docs/screenshots/6-audit-face.jpg)
 
 ## The idea
 
@@ -167,7 +224,10 @@ display only — every response changes a product that gets recommended:
   glow, coverage and under-eye intensities. This is the half other tools skip,
   and it is why the same matched shade is prescribed matte on oily skin and
   dewy on dry. It also aims the skincare aisle at what the scan actually
-  flagged.
+  flagged. In the coverage audit, the two readings together are a unit of
+  **demand**: every scan's skin colour and prescribed finish is what a range is
+  checked against, so a brand sees the real shoppers it failed, by shade and by
+  formula.
 - **`face-attr-analysis`** gives face shape, which decides hairstyle ranking,
   and a detected gender that *preselects* the Women's / Men's / Everything
   control. The shopper's own answer is what filters the shelves; the detection
@@ -175,7 +235,9 @@ display only — every response changes a product that gets recommended:
   not good enough to hide an aisle on its own.
 - **`makeup-vto`** renders foundation, lipstick and blush carrying **your**
   prescribed intensities, so the try-on is your formula in that shade rather
-  than a stock preset.
+  than a stock preset. The audit renders it twice on one face: the closest
+  base a range stocks, in that product's own finish, beside what the face was
+  prescribed — the gap, drawn where a buyer can see it.
 - **`cloth-v4`** renders any garment from its own product photo, which is what
   lets a merchant's uploaded row be tried on minutes after upload.
   **`cloth`** covers YouCam's template garments, since v4 dropped `template_id`.
