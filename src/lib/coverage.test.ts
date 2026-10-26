@@ -8,6 +8,7 @@ import {
   LADDER,
   MATCH_DE,
   MONK,
+  nearestRung,
   PANEL,
   placeDemand,
   placeFace,
@@ -208,5 +209,15 @@ describe('an uploaded range', () => {
     expect(read.rejected).toEqual([{ name: 'Mystery Base', why: 'No colour we could resolve.' }])
     // The shirt is counted, not silently lost.
     expect(read.skipped).toBe(1)
+  })
+})
+
+describe('the scale and real skin', () => {
+  test("a published tone sits on the scale; a real scan can sit well off it", () => {
+    expect(nearestRung('#a07e56')).toEqual({ at: 6, hex: '#a07e56', dE: 0 })
+    // A real mid-depth scan: less yellow and less saturated than Monk at its depth.
+    const real = nearestRung('#b09179')
+    expect(Math.floor(real.at)).toBe(5)
+    expect(real.dE).toBeGreaterThan(MATCH_DE)
   })
 })

@@ -37,6 +37,7 @@ type Source =
 interface FaceResult extends Placement {
   skinHex: string
   need: string
+  onScale: { at: number; hex: string; dE: number }
   renders: {
     needed: { label: string; effects: unknown[] }
     stocked: { label: string; effects: unknown[] } | null
@@ -556,6 +557,14 @@ function FaceTest({
             <i className="dot" style={{ background: result.skinHex }} aria-hidden />
             <span>{placementSentence(result)}</span>
           </p>
+          {result.onScale.dE >= 5 && (
+            <p className="tiny">
+              This face reads nearest Monk {Number.isInteger(result.onScale.at) ? result.onScale.at : result.onScale.at.toFixed(1)}{' '}
+              but sits {result.onScale.dE} ΔE off the scale — real skin varies in undertone and
+              saturation at every depth, which ten reference tones cannot show. That is why
+              real scans are placed as they are, not snapped to the nearest tone.
+            </p>
+          )}
           <button className="btn btn-sm" onClick={render} disabled={rendering}>
             {rendering ? 'Rendering on the face…' : 'Show both on this face'}
           </button>
@@ -627,9 +636,13 @@ function Method() {
           on deep skin.
         </p>
         <p>
-          <strong>Limits.</strong> The audit is only as good as the colours it is given.
-          Swatch hexes scraped from product photos run light, especially at the deep end, so
-          this is an audit of a catalogue's data, and the reason to publish accurate shade
+          <strong>Limits.</strong> The panel audits a reference scale, and real skin does not
+          sit exactly on it: measured mid-depth skin is less yellow and less saturated than
+          Monk's published tones, so a real face can be several ΔE off the scale at its own
+          depth. Real scans and the face test are placed exactly as measured for that reason —
+          treat the strip as the map and the scans as the territory. The audit is also only as
+          good as the colours it is given: swatch hexes scraped from product photos run light,
+          especially at the deep end, which is itself the case for publishing accurate shade
           colours.
         </p>
       </div>

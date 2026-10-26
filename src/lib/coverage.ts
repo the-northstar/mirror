@@ -101,6 +101,30 @@ export const LADDER: Rung[] = (() => {
   return out
 })()
 
+/**
+ * Where a measured colour sits against the scale: its nearest rung, and how far
+ * off the line it is.
+ *
+ * Real skin does not lie on Monk's line. Measured mid-depth skin sits near hue
+ * 62–65° while the published tones 5–6 sit near 74–81°, so a real face can be
+ * 8 ΔE from the scale at its own depth. The panel audits the reference; this
+ * says how far a real face is from it, which is why real scans are placed on
+ * their own rather than snapped to a rung.
+ */
+export function nearestRung(hex: string): { at: number; hex: string; dE: number } {
+  const lab = hexToLab(hex)
+  let best = LADDER[0]
+  let dist = Infinity
+  for (const r of LADDER) {
+    const d = deltaE(lab, r.lab)
+    if (d < dist) {
+      dist = d
+      best = r
+    }
+  }
+  return { at: best.at, hex: best.hex, dE: Math.round(dist * 10) / 10 }
+}
+
 export interface Seat {
   at: number
   hex: string

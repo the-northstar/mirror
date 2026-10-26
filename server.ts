@@ -54,7 +54,7 @@ import {
   type Product,
 } from './src/lib/catalogue'
 import { csvToRows, detectKind, fetchFeed, rowsToCatalogue, type FeedKind } from './src/lib/feed'
-import { audit, placeDemand, placeFace } from './src/lib/coverage'
+import { audit, nearestRung, placeDemand, placeFace } from './src/lib/coverage'
 import { demandFor, MIRROR, recordDemand } from './src/lib/demand'
 import {
   rankBlush,
@@ -850,6 +850,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
       face = {
         skinHex: f.skinHex,
         ...placed,
+        // How far this face sits from the reference scale. Real skin is often
+        // off Monk's line at its own depth, which the strip cannot show.
+        onScale: nearestRung(f.skinHex),
         renders: {
           needed: {
             label: `What this face was prescribed: ${f.skinHex}, ${placed.need}`,
