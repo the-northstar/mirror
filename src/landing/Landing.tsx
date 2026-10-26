@@ -109,14 +109,21 @@ API key    mk_own-9988…      (secret)`,
 ]
 
 /** The real YouCam task names, so this reads as a build rather than a mockup. */
+/** Every YouCam endpoint the app calls — the same thirteen as the README table. */
 const CHIPS = [
+  'file',
   'task/skin-tone-analysis',
   'task/skin-analysis',
   'task/face-attr-analysis',
   'task/makeup-vto',
   'task/cloth-v4',
+  'task/cloth',
   'task/hair-transfer',
+  'task/look-vto',
   'task/skin-simulation',
+  'template/cloth',
+  'template/look-vto',
+  'template/hair-transfer',
 ]
 
 export function Landing({
@@ -359,7 +366,7 @@ export function Landing({
             Under the panel
           </p>
           <h2 className="mt-5 max-w-2xl font-serif text-4xl leading-[1.05] tracking-[-0.02em] text-[color-mix(in_oklab,var(--paper)_92%,transparent)] sm:text-5xl">
-            Ten calls. No colour tagged by hand.
+            Thirteen calls. No colour tagged by hand.
           </h2>
           <div className="mt-12 flex flex-wrap gap-3">
             {CHIPS.map((c) => (
