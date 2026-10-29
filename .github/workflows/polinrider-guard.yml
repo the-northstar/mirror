@@ -111,29 +111,50 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          # Reset the branch via the API (works after a FORCE-push — a shallow checkout
-          # never has the old tip, so `git push $parent:branch` dies with "bad object";
-          # that is exactly how the 2026-08-29 wave survived). New branch => delete it.
-          # Then WALK BACK: if the pre-push tip is itself infected (double push, or a
-          # branch that was already dirty) keep stepping to the parent until clean.
-          repo="${{ github.repository }}"; ref="${{ github.ref_name }}"; sha="${{ github.event.before }}"
+          # SAFE REVERT (no force-push, no history rewrite, never resets over newer commits):
+          #  - judge the branch's CURRENT tip, not the stale event (runs can be queued for hours);
+          #  - if the tip is already clean, do nothing;
+          #  - else find the last clean ancestor of the pre-push tip (walking back) and add ONE
+          #    ordinary commit on top of the current tip that restores that clean tree.
+          # A brand-new infected branch with no newer commits is still deleted.
+          repo="${{ github.repository }}"; ref="${{ github.ref_name }}"; pushed="${{ github.sha }}"; sha="${{ github.event.before }}"
+          out(){ echo "reverted=$1" >> "$GITHUB_OUTPUT"; }
+          head=$(gh api "repos/$repo/git/ref/heads/$ref" --jq .object.sha 2>/dev/null) || head=""
+          if [ -z "$head" ]; then echo "branch $ref no longer exists - nothing to revert"; out 1; exit 0; fi
+          if [ "$head" != "$pushed" ]; then
+            if git fetch -q --depth 1 origin "$head" 2>/dev/null && git checkout -q --force "$head" 2>/dev/null \
+               && bash "$RUNNER_TEMP/scan.sh" >/dev/null; then
+              echo "tip ${head:0:8} is already clean - nothing to revert"; out 1; exit 0
+            fi
+          fi
           if [ "$sha" = "0000000000000000000000000000000000000000" ]; then
-            gh api -X DELETE "repos/$repo/git/refs/heads/$ref" && { echo "reverted=deleted" >> "$GITHUB_OUTPUT"; exit 0; }
-          else
-            for i in $(seq 1 30); do
-              git fetch -q --depth 2 origin "$sha" 2>/dev/null || break
-              git checkout -q --force "$sha" 2>/dev/null || break
-              if bash "$RUNNER_TEMP/scan.sh" >/dev/null; then
-                gh api -X PATCH "repos/$repo/git/refs/heads/$ref" -f sha="$sha" -F force=true >/dev/null \
-                  && { echo "reverted to ${sha:0:8} (walked back $((i-1)))"; echo "reverted=1" >> "$GITHUB_OUTPUT"; exit 0; }
-                break
+            if [ "$head" = "$pushed" ]; then
+              gh api -X DELETE "repos/$repo/git/refs/heads/$ref" && { echo "deleted new infected branch"; out deleted; exit 0; }
+            fi
+            echo "::error::new branch $ref is infected but has newer commits - not deleting, fix by hand"; out 0; exit 0
+          fi
+          clean=""
+          for i in $(seq 1 30); do
+            git fetch -q --depth 2 origin "$sha" 2>/dev/null || break
+            git checkout -q --force "$sha" 2>/dev/null || break
+            if bash "$RUNNER_TEMP/scan.sh" >/dev/null; then clean="$sha"; break; fi
+            echo "${sha:0:8} also infected - walking back"
+            sha=$(git rev-parse -q --verify "$sha^" 2>/dev/null) || break
+          done
+          if [ -n "$clean" ]; then
+            tree=$(gh api "repos/$repo/git/commits/$clean" --jq .tree.sha) || tree=""
+            for t in 1 2 3; do
+              [ -n "$tree" ] || break
+              head=$(gh api "repos/$repo/git/ref/heads/$ref" --jq .object.sha) || break
+              new=$(gh api -X POST "repos/$repo/git/commits" -f message="security: restore clean tree ${clean:0:8} (auto-revert of PolinRider payload) [skip ci]" -f tree="$tree" -f "parents[]=$head" --jq .sha) || break
+              if gh api -X PATCH "repos/$repo/git/refs/heads/$ref" -f sha="$new" -F force=false >/dev/null 2>&1; then
+                echo "restored clean tree ${clean:0:8} with commit ${new:0:8} on top of ${head:0:8}"; out 1; exit 0
               fi
-              echo "${sha:0:8} also infected — walking back"
-              sha=$(git rev-parse -q --verify "$sha^" 2>/dev/null) || break
+              echo "branch moved while reverting - retry $t"
             done
           fi
-          echo "::error::REVERT FAILED — payload is STILL on $ref"
-          echo "reverted=0" >> "$GITHUB_OUTPUT"
+          echo "::error::REVERT FAILED - payload is STILL on $ref"
+          out 0
 
       - name: Open alert issue
         if: steps.scan.outputs.detected == '1'
